@@ -45,13 +45,11 @@ contract SenderWhitelistHook is AbstractPostDispatchHook, Ownable {
     // ============ Storage ============
 
     /// @notice Set of whitelisted sender addresses
-    EnumerableSet.AddressSet private _whitelist;    
+    EnumerableSet.AddressSet private _whitelist;
 
     // ============ Constructor ============
 
-    constructor(
-        address _owner
-    ) {
+    constructor(address _owner) {
         _transferOwnership(_owner);
     }
 
@@ -103,7 +101,10 @@ contract SenderWhitelistHook is AbstractPostDispatchHook, Ownable {
         bytes calldata,
         bytes calldata message
     ) internal view override {
-        require(_whitelist.contains(message.senderAddress()), "SenderWhitelistHook: sender not whitelisted");
+        require(
+            _whitelist.contains(message.senderAddress()),
+            "SenderWhitelistHook: sender not whitelisted"
+        );
     }
 
     /// @inheritdoc AbstractPostDispatchHook
@@ -111,7 +112,10 @@ contract SenderWhitelistHook is AbstractPostDispatchHook, Ownable {
         bytes calldata,
         bytes calldata message
     ) internal view override returns (uint256) {
-        require(_whitelist.contains(message.senderAddress()), "SenderWhitelistHook: sender not whitelisted");
+        require(
+            _whitelist.contains(message.senderAddress()),
+            "SenderWhitelistHook: sender not whitelisted"
+        );
         return 0;
     }
 }

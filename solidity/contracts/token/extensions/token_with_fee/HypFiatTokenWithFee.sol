@@ -6,7 +6,6 @@ import {IRouterFeeCollector} from "../../../interfaces/IRouterFeeCollector.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
@@ -14,7 +13,7 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
     using Address for address;
 
     IRouterFeeCollector public feeCollector;
-    
+
     // Storage gap for upgrade safety
     uint256[49] private __GAP;
 
@@ -33,9 +32,15 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
         address _feeCollector
     ) public virtual initializer {
         _MailboxClient_initialize(_hook, _interchainSecurityModule, _owner);
-        require(Address.isContract(_feeCollector), "HypFiatTokenWithFee: fee collector must be a contract");
+        require(
+            Address.isContract(_feeCollector),
+            "HypFiatTokenWithFee: fee collector must be a contract"
+        );
         feeCollector = IRouterFeeCollector(_feeCollector);
-        require(address(wrappedToken) == feeCollector.feeTokenAddress(), "HypFiatTokenWithFee: fiat token must match fee collector's fee token");
+        require(
+            address(wrappedToken) == feeCollector.feeTokenAddress(),
+            "HypFiatTokenWithFee: fiat token must match fee collector's fee token"
+        );
     }
 
     function transferRemote(
@@ -43,17 +48,29 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
         bytes32 _recipient,
         uint256 _amountOrId
     ) external payable override nonReentrant returns (bytes32 messageId) {
-
         uint256 transferFee = feeCollector.quoteFee(_destination);
-        require(_amountOrId > transferFee, "Transfer amount must be greater than fee");
-        
+        require(
+            _amountOrId > transferFee,
+            "Transfer amount must be greater than fee"
+        );
+
         // Collect fee first (Checks-Effects-Interactions pattern) - only if fee > 0
         if (transferFee > 0) {
-            IERC20(wrappedToken).safeTransferFrom(msg.sender, address(feeCollector), transferFee);
+            IERC20(wrappedToken).safeTransferFrom(
+                msg.sender,
+                address(feeCollector),
+                transferFee
+            );
         }
 
         uint256 amountAfterFee = _amountOrId - transferFee;
-    
-        return _transferRemote(_destination, _recipient, amountAfterFee, msg.value);
+
+        return
+            _transferRemote(
+                _destination,
+                _recipient,
+                amountAfterFee,
+                msg.value
+            );
     }
 }

@@ -13,7 +13,7 @@ contract HypERC20CollateralWithFee is HypERC20Collateral, ReentrancyGuard {
     using Address for address;
 
     IRouterFeeCollector public feeCollector;
-    
+
     // Storage gap for upgrade safety
     uint256[49] private __GAP;
 
@@ -32,7 +32,10 @@ contract HypERC20CollateralWithFee is HypERC20Collateral, ReentrancyGuard {
         address _feeCollector
     ) public virtual initializer {
         _MailboxClient_initialize(_hook, _interchainSecurityModule, _owner);
-        require(Address.isContract(_feeCollector), "HypERC20CollateralWithFee: fee collector must be a contract");
+        require(
+            Address.isContract(_feeCollector),
+            "HypERC20CollateralWithFee: fee collector must be a contract"
+        );
         feeCollector = IRouterFeeCollector(_feeCollector);
     }
 
@@ -41,15 +44,18 @@ contract HypERC20CollateralWithFee is HypERC20Collateral, ReentrancyGuard {
         bytes32 _recipient,
         uint256 _amountOrId
     ) external payable override nonReentrant returns (bytes32 messageId) {
-
         uint256 transferFee = feeCollector.quoteFee(_destination);
-        
+
         // Collect fee first (Checks-Effects-Interactions pattern) - only if fee > 0
         if (transferFee > 0) {
-            IERC20(feeCollector.feeTokenAddress()).safeTransferFrom(msg.sender, address(feeCollector), transferFee);
+            IERC20(feeCollector.feeTokenAddress()).safeTransferFrom(
+                msg.sender,
+                address(feeCollector),
+                transferFee
+            );
         }
-    
-        return _transferRemote(_destination, _recipient, _amountOrId, msg.value);
-    }
 
+        return
+            _transferRemote(_destination, _recipient, _amountOrId, msg.value);
+    }
 }

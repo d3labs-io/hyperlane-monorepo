@@ -7,7 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import "../../../PackageVersioned.sol";
+import {PackageVersioned} from "../../../PackageVersioned.sol";
 
 /**
  * @title RouterFeeCollector
@@ -17,16 +17,16 @@ import "../../../PackageVersioned.sol";
 contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
-    
+
     /// @notice Constant public address that can only be set during construction
-    address public immutable feeTokenAddress;
+    address public immutable FEE_TOKEN_ADDRESS;
 
     bool public isActive;
 
     address public beneficiary;
 
     /// @notice Mapping of destination chain ID to fee amount
-    mapping(uint32 => uint256) private routerFees;
+    mapping(uint32 destinationId => uint256 fee) private routerFees;
 
     /// @notice Set of configured destination IDs
     EnumerableSet.UintSet private configuredDestinations;
@@ -41,7 +41,10 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
     event FeeRemoved(uint32 indexed destinationId);
 
     /// @notice Emitted when the beneficiary address is changed
-    event BeneficiarySet(address indexed oldBeneficiary, address indexed newBeneficiary);
+    event BeneficiarySet(
+        address indexed oldBeneficiary,
+        address indexed newBeneficiary
+    );
 
     /// @notice Emitted when the active status is changed
     event IsActive(bool isActive);
@@ -52,10 +55,16 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @param _feeTokenAddress The fee token address that can only be set during construction
      */
     constructor(address _owner, address _feeTokenAddress) {
-        require(_owner != address(0), "RouterFeeCollector: owner cannot be zero address");
-        require(Address.isContract(_feeTokenAddress), "RouterFeeCollector: fee token address must be a contract");
-        
-        feeTokenAddress = _feeTokenAddress;
+        require(
+            _owner != address(0),
+            "RouterFeeCollector: owner cannot be zero address"
+        );
+        require(
+            Address.isContract(_feeTokenAddress),
+            "RouterFeeCollector: fee token address must be a contract"
+        );
+
+        FEE_TOKEN_ADDRESS = _feeTokenAddress;
         beneficiary = _owner;
         isActive = true;
         _transferOwnership(_owner);
@@ -70,7 +79,10 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
         if (!isActive) {
             return 0;
         }
-        require(configuredDestinations.contains(destinationId), "RouterFeeCollector: destination not configured");
+        require(
+            configuredDestinations.contains(destinationId),
+            "RouterFeeCollector: destination not configured"
+        );
         return routerFees[destinationId];
     }
 
@@ -91,7 +103,10 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @dev Only the owner can call this function and beneficiary cannot be address zero
      */
     function setBeneficiary(address _beneficiary) external onlyOwner {
-        require(_beneficiary != address(0), "RouterFeeCollector: beneficiary cannot be zero address");
+        require(
+            _beneficiary != address(0),
+            "RouterFeeCollector: beneficiary cannot be zero address"
+        );
         address oldBeneficiary = beneficiary;
         beneficiary = _beneficiary;
         emit BeneficiarySet(oldBeneficiary, _beneficiary);
@@ -102,7 +117,7 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @return The balance of the specified token
      */
     function getBalance() external view returns (uint256) {
-        return IERC20(feeTokenAddress).balanceOf(address(this));
+        return IERC20(FEE_TOKEN_ADDRESS).balanceOf(address(this));
     }
 
     /**
@@ -110,7 +125,10 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @param destinationId The chain ID of the destination to remove
      */
     function removeFee(uint32 destinationId) external onlyOwner {
-        require(configuredDestinations.contains(destinationId), "RouterFeeCollector: destination not configured");
+        require(
+            configuredDestinations.contains(destinationId),
+            "RouterFeeCollector: destination not configured"
+        );
         configuredDestinations.remove(destinationId);
         delete routerFees[destinationId];
         emit FeeRemoved(destinationId);
@@ -120,7 +138,11 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @notice Get all configured destination IDs
      * @return Array of configured destination IDs
      */
-    function getConfiguredDestinations() external view returns (uint32[] memory) {
+    function getConfiguredDestinations()
+        external
+        view
+        returns (uint32[] memory)
+    {
         uint256[] memory values = configuredDestinations.values();
         uint32[] memory destinations = new uint32[](values.length);
         for (uint256 i = 0; i < values.length; i++) {
@@ -134,7 +156,9 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @param destinationId The chain ID to check
      * @return True if the destination is configured, false otherwise
      */
-    function isDestinationConfigured(uint32 destinationId) external view returns (bool) {
+    function isDestinationConfigured(
+        uint32 destinationId
+    ) external view returns (bool) {
         return configuredDestinations.contains(destinationId);
     }
 
@@ -153,10 +177,13 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @dev Only callable by the owner or beneficiary. Transfers the entire balance of this contract to the beneficiary
      */
     function claim() external {
-        require(msg.sender == owner() || msg.sender == beneficiary, "Only owner or beneficiary can claim");
-        uint256 balance = IERC20(feeTokenAddress).balanceOf(address(this));
+        require(
+            msg.sender == owner() || msg.sender == beneficiary,
+            "Only owner or beneficiary can claim"
+        );
+        uint256 balance = IERC20(FEE_TOKEN_ADDRESS).balanceOf(address(this));
         require(balance > 0, "No fees to claim");
-        IERC20(feeTokenAddress).safeTransfer(beneficiary, balance);
+        IERC20(FEE_TOKEN_ADDRESS).safeTransfer(beneficiary, balance);
         emit FeesClaimed(beneficiary, balance);
     }
 }
