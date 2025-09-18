@@ -71,6 +71,14 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
     }
 
     /**
+     * @notice Get the constant fee token address
+     * @return The fee token address
+     */
+    function feeTokenAddress() external view returns (address) {
+        return FEE_TOKEN_ADDRESS;
+    }
+
+    /**
      * @notice Get the fee for a specific destination chain
      * @param destinationId The chain ID of the destination
      * @return The fee amount for the destination chain
