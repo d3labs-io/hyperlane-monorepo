@@ -49,11 +49,6 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
         uint256 _amountOrId
     ) external payable override nonReentrant returns (bytes32 messageId) {
         uint256 transferFee = feeCollector.quoteFee(_destination);
-        require(
-            _amountOrId > transferFee,
-            "Transfer amount must be greater than fee"
-        );
-
         // Collect fee first (Checks-Effects-Interactions pattern) - only if fee > 0
         if (transferFee > 0) {
             IERC20(wrappedToken).safeTransferFrom(
@@ -62,14 +57,11 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
                 transferFee
             );
         }
-
-        uint256 amountAfterFee = _amountOrId - transferFee;
-
         return
             _transferRemote(
                 _destination,
                 _recipient,
-                amountAfterFee,
+                _amountOrId,
                 msg.value
             );
     }
