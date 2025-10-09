@@ -3,6 +3,7 @@ pragma solidity >=0.8.0;
 
 import {HypFiatToken} from "../HypFiatToken.sol";
 import {IRouterFeeCollector} from "../../../interfaces/IRouterFeeCollector.sol";
+import {Quote} from "../../../interfaces/ITokenBridge.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
@@ -64,5 +65,18 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
                 _amountOrId,
                 msg.value
             );
+    }
+
+    function quoteTransferRemote(
+        uint32 _destinationDomain,
+        bytes32 _recipient,
+        uint256 _amount
+    ) external view virtual override returns (Quote[] memory quotes) {
+        quotes = new Quote[](2);
+        quotes[0] = Quote({
+            token: address(0),
+            amount: _quoteGasPayment(_destinationDomain, _recipient, _amount)
+        });
+        quotes[1] = Quote({token: address(wrappedToken), amount: _amount + feeCollector.quoteFee(_destinationDomain)});
     }
 }

@@ -7,6 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {Quote} from "../../../interfaces/ITokenBridge.sol";
 
 contract HypERC20CollateralWithFee is HypERC20Collateral, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -57,5 +58,19 @@ contract HypERC20CollateralWithFee is HypERC20Collateral, ReentrancyGuard {
 
         return
             _transferRemote(_destination, _recipient, _amountOrId, msg.value);
+    }
+    
+    function quoteTransferRemote(
+        uint32 _destinationDomain,
+        bytes32 _recipient,
+        uint256 _amount
+    ) external view virtual override returns (Quote[] memory quotes) {
+        quotes = new Quote[](3);
+        quotes[0] = Quote({
+            token: address(0),
+            amount: _quoteGasPayment(_destinationDomain, _recipient, _amount)
+        });
+        quotes[1] = Quote({token: address(wrappedToken), amount: _amount});
+        quotes[2] = Quote({token: feeCollector.feeTokenAddress(), amount: feeCollector.quoteFee(_destinationDomain)});
     }
 }
