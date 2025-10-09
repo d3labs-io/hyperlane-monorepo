@@ -25,6 +25,8 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
 
     address public beneficiary;
 
+    uint256 public maxFee;
+
     /// @notice Mapping of destination chain ID to fee amount
     mapping(uint32 destinationId => uint256 fee) private routerFees;
 
@@ -49,6 +51,9 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
     /// @notice Emitted when the active status is changed
     event IsActive(bool isActive);
 
+    /// @notice Emitted when the maxFee is changed
+    event MaxFeeSet(uint256 oldMaxFee, uint256 newMaxFee);
+
     /**
      * @notice Constructor that sets the initial owner and constant address
      * @param _owner The address that will be set as the initial owner
@@ -67,6 +72,7 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
         FEE_TOKEN_ADDRESS = _feeTokenAddress;
         beneficiary = _owner;
         isActive = true;
+        maxFee = 1_000_000; // USDT and USDC are both 6 decimals token. The default maxFee is 1 USD
         _transferOwnership(_owner);
     }
 
@@ -100,9 +106,21 @@ contract RouterFeeCollector is Ownable, IRouterFeeCollector, PackageVersioned {
      * @param fee The fee amount to set for the destination chain
      */
     function setFee(uint32 destinationId, uint256 fee) external onlyOwner {
+        require(fee <= maxFee, "RouterFeeCollector: fee too high");
         routerFees[destinationId] = fee;
         configuredDestinations.add(destinationId);
         emit FeeSet(destinationId, fee);
+    }
+
+    /**
+     * @notice Set the maximum allowed fee
+     * @param _maxFee The new maximum fee limit
+     */
+    function setMaxFee(uint256 _maxFee) external onlyOwner {
+        require(_maxFee > 0, "RouterFeeCollector: maxFee must be > 0");
+        uint256 old = maxFee;
+        maxFee = _maxFee;
+        emit MaxFeeSet(old, _maxFee);
     }
 
     /**
