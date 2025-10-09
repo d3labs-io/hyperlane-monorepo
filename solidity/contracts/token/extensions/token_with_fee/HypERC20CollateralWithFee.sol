@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.8.0;
+pragma solidity 0.8.22;
 
 import {HypERC20Collateral} from "../../HypERC20Collateral.sol";
 import {IRouterFeeCollector} from "../../../interfaces/IRouterFeeCollector.sol";
