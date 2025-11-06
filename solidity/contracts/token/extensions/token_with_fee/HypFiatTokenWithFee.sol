@@ -65,10 +65,6 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
             "HypFiatTokenWithFee: fee collector must be a contract"
         );
         feeCollector = IRouterFeeCollector(_feeCollector);
-        require(
-            address(wrappedToken) == feeCollector.feeTokenAddress(),
-            "HypFiatTokenWithFee: fiat token must match fee collector's fee token"
-        );
     }
 
     /**
@@ -90,7 +86,7 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
         uint256 transferFee = feeCollector.quoteFee(_destination);
         // Collect fee first (Checks-Effects-Interactions pattern) - only if fee > 0
         if (transferFee > 0) {
-            IERC20(wrappedToken).safeTransferFrom(
+            IERC20(feeCollector.feeTokenAddress()).safeTransferFrom(
                 msg.sender,
                 address(feeCollector),
                 transferFee
@@ -121,11 +117,31 @@ contract HypFiatTokenWithFee is HypFiatToken, ReentrancyGuard {
         bytes32 _recipient,
         uint256 _amount
     ) external view virtual override returns (Quote[] memory quotes) {
-        quotes = new Quote[](2);
-        quotes[0] = Quote({
-            token: address(0),
-            amount: _quoteGasPayment(_destinationDomain, _recipient, _amount)
-        });
-        quotes[1] = Quote({token: address(wrappedToken), amount: _amount + feeCollector.quoteFee(_destinationDomain)});
+        uint256 gasPayment = _quoteGasPayment(
+            _destinationDomain,
+            _recipient,
+            _amount
+        );
+        uint256 fee = feeCollector.quoteFee(_destinationDomain);
+        address feeToken = feeCollector.feeTokenAddress();
+        address wrappedTokenAddress = address(wrappedToken);
+
+        if (fee == 0) {
+            quotes = new Quote[](2);
+            quotes[0] = Quote({token: address(0), amount: gasPayment});
+            quotes[1] = Quote({token: wrappedTokenAddress, amount: _amount});
+        } else if (feeToken == wrappedTokenAddress) {
+            quotes = new Quote[](2);
+            quotes[0] = Quote({token: address(0), amount: gasPayment});
+            quotes[1] = Quote({
+                token: wrappedTokenAddress,
+                amount: _amount + fee
+            });
+        } else {
+            quotes = new Quote[](3);
+            quotes[0] = Quote({token: address(0), amount: gasPayment});
+            quotes[1] = Quote({token: wrappedTokenAddress, amount: _amount});
+            quotes[2] = Quote({token: feeToken, amount: fee});
+        }
     }
 }
