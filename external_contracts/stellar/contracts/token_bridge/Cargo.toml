@@ -1,0 +1,23 @@
+[package]
+name = "inter_token"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-access = "=0.4.0"
+stellar-macros = "=0.4.0"
+stellar-contract-utils = "=0.4.0"
+stellar-tokens = "=0.4.0"
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

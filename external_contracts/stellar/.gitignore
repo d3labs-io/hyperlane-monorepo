@@ -1,0 +1,12 @@
+# Rust's output directory
+target
+
+# Local settings
+.soroban
+.stellar
+
+# Documentation
+*.md
+
+# Test record
+/contracts/token_bridge/test_snapshots
