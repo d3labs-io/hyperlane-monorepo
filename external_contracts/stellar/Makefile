@@ -1,7 +1,7 @@
 # TokenBridge Contract Makefile
 # Provides commands for building, testing, and upgrading the TokenBridge contract
 
-.PHONY: help build test fmt clean install-wasm deploy-upgrader upgrade-simple upgrade-atomic verify-upgrade
+.PHONY: help build test fmt clean deploy deploy-complete verify upload-wasm upgrade-contract upgrade-complete execute-bridge-operation approve-token get-latest-ledger
 
 # Default target
 default: build
@@ -17,25 +17,38 @@ help:
 	@echo "  make fmt                - Format code"
 	@echo "  make clean              - Clean build artifacts"
 	@echo ""
-	@echo "Deployment & Upgrade:"
-	@echo "  make install-wasm       - Install WASM and get hash"
-	@echo "  make deploy-upgrader    - Deploy the Upgrader helper contract"
-	@echo "  make upgrade-simple     - Perform simple WASM upgrade"
-	@echo "  make upgrade-atomic     - Perform atomic upgrade with migration"
-	@echo "  make verify-upgrade     - Verify upgrade was successful"
+	@echo "Initial Deployment:"
+	@echo "  make deploy             - Deploy contract to network"
+	@echo "  make deploy-complete    - Build and deploy in one command"
 	@echo ""
-	@echo "Environment Variables (required for upgrade commands):"
-	@echo "  NETWORK                 - Network to use (testnet or mainnet)"
-	@echo "  CONTRACT_ID             - ID of contract to upgrade"
-	@echo "  ADMIN                   - Admin address (must sign transaction)"
-	@echo "  WASM_HASH               - Hash of new WASM (from install-wasm)"
+	@echo "Contract Upgrade:"
+	@echo "  make upload-wasm        - Upload WASM to network and get hash"
+	@echo "  make upgrade-contract   - Upgrade contract with new WASM hash"
+	@echo "  make upgrade-complete   - Complete upgrade workflow (build + upload + upgrade)"
 	@echo ""
-	@echo "Example:"
-	@echo "  export NETWORK=testnet"
-	@echo "  export CONTRACT_ID=CAAAA..."
-	@echo "  export ADMIN=GBUQW..."
-	@echo "  make install-wasm"
-	@echo "  make upgrade-simple WASM_HASH=<hash>"
+	@echo "Environment Variables:"
+	@echo "  Deployment:"
+	@echo "    NETWORK               - Network to use (testnet or mainnet)"
+	@echo "    SOURCE_ACCOUNT        - Deployer account (pays for deployment)"
+	@echo "    OWNER                 - Contract owner address"
+	@echo "    SYSTEM_WALLET         - System wallet address"
+	@echo ""
+	@echo "  Upgrade:"
+	@echo "    CONTRACT_ID           - ID of contract to upgrade"
+	@echo "    WASM_HASH             - Hash of new WASM (from upload-wasm)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  # Deploy to testnet"
+	@echo "  make deploy NETWORK=testnet SOURCE_ACCOUNT=admin OWNER=admin SYSTEM_WALLET=admin"
+	@echo ""
+	@echo "  # Upgrade existing contract"
+	@echo "  make upload-wasm NETWORK=testnet SOURCE_ACCOUNT=admin"
+	@echo "  make upgrade-contract CONTRACT_ID=CALC65... NETWORK=testnet SOURCE_ACCOUNT=admin WASM_HASH=<hash>"
+	@echo ""
+	@echo "  # Or use complete upgrade workflow"
+	@echo "  make upgrade-complete CONTRACT_ID=CALC65... NETWORK=testnet SOURCE_ACCOUNT=admin"
+	@echo ""
+	@echo "For detailed deployment instructions, see DEPLOYMENT.md"
 	@echo ""
 
 # Build the contract
@@ -46,7 +59,6 @@ test: build
 
 build:
 	stellar contract build
-	@ls -l ../../target/wasm32v1-none/release/*.wasm
 
 fmt:
 	cargo fmt --all
@@ -55,118 +67,161 @@ clean:
 	cargo clean
 
 # ============================================================================
-# DEPLOYMENT & UPGRADE COMMANDS
+# INITIAL DEPLOYMENT COMMANDS
 # ============================================================================
 
-# Install WASM binary to network and get its hash
-# Usage: make install-wasm NETWORK=testnet
-install-wasm: build
-	@if [ -z "$(NETWORK)" ]; then \
-		echo "Error: NETWORK not set. Use: make install-wasm NETWORK=testnet"; \
-		exit 1; \
-	fi
-	@echo "Installing WASM to $(NETWORK)..."
-	@echo ""
-	@echo "Note: You need to provide --source-account to complete the installation."
-	@echo "Example:"
-	@echo "  stellar contract upload --source-account <YOUR_ACCOUNT> --wasm ../../target/wasm32v1-none/release/inter_token.wasm --network $(NETWORK)"
-	@echo ""
-	@echo "The WASM hash for this build is:"
-	@stellar contract build 2>&1 | grep "Wasm Hash:" | awk '{print $$3}' | tee /tmp/wasm_hash.txt
-	@echo ""
-	@echo "✅ WASM hash extracted!"
-	@echo "WASM Hash saved to /tmp/wasm_hash.txt"
-	@echo "Use: export WASM_HASH=$$(cat /tmp/wasm_hash.txt)"
-
-# Deploy the Upgrader helper contract
-# Usage: make deploy-upgrader NETWORK=testnet
-deploy-upgrader:
-	@if [ -z "$(NETWORK)" ]; then \
-		echo "Error: NETWORK not set. Use: make deploy-upgrader NETWORK=testnet"; \
-		exit 1; \
-	fi
-	@echo "Building Upgrader contract..."
-	@stellar contract build --contract upgrader
-	@echo ""
-	@echo "⚠️  To deploy the Upgrader contract, use:"
-	@echo "  stellar contract deploy --source-account <YOUR_ACCOUNT> --wasm ../../target/wasm32v1-none/release/upgrader.wasm --network $(NETWORK)"
-	@echo ""
-	@echo "After deployment, save the contract ID:"
-	@echo "  export UPGRADER_ID=<contract_id_from_deployment>"
-
-# Perform simple WASM upgrade (no migration)
-# Usage: make upgrade-simple NETWORK=testnet CONTRACT_ID=... ADMIN=... WASM_HASH=...
-upgrade-simple:
-	@if [ -z "$(NETWORK)" ] || [ -z "$(CONTRACT_ID)" ] || [ -z "$(ADMIN)" ] || [ -z "$(WASM_HASH)" ]; then \
+# Deploy contract to network
+# Usage: make deploy NETWORK=testnet SOURCE_ACCOUNT=admin OWNER=admin SYSTEM_WALLET=admin
+deploy: build
+	@if [ -z "$(NETWORK)" ] || [ -z "$(SOURCE_ACCOUNT)" ] || [ -z "$(OWNER)" ] || [ -z "$(SYSTEM_WALLET)" ]; then \
 		echo "Error: Missing required parameters"; \
-		echo "Usage: make upgrade-simple NETWORK=testnet CONTRACT_ID=... ADMIN=... WASM_HASH=..."; \
+		echo "Usage: make deploy NETWORK=<network> SOURCE_ACCOUNT=<account> OWNER=<owner> SYSTEM_WALLET=<wallet>"; \
+		echo ""; \
+		echo "Example:"; \
+		echo "  make deploy NETWORK=testnet SOURCE_ACCOUNT=admin OWNER=admin SYSTEM_WALLET=admin"; \
+		echo ""; \
+		echo "Parameters:"; \
+		echo "  NETWORK        - Network to deploy to (testnet or mainnet)"; \
+		echo "  SOURCE_ACCOUNT - Deployer account that pays for deployment"; \
+		echo "  OWNER          - Contract owner address (can upgrade, manage admins)"; \
+		echo "  SYSTEM_WALLET  - System wallet address (can execute bridge operations)"; \
 		exit 1; \
 	fi
-	@echo "Performing simple WASM upgrade..."
-	@echo "Network:     $(NETWORK)"
-	@echo "Contract ID: $(CONTRACT_ID)"
-	@echo "Admin:       $(ADMIN)"
-	@echo "WASM Hash:   $(WASM_HASH)"
+	@echo "Deploying TokenBridge contract..."
+	@echo "Network:        $(NETWORK)"
+	@echo "Source Account: $(SOURCE_ACCOUNT)"
+	@echo "Owner:          $(OWNER)"
+	@echo "System Wallet:  $(SYSTEM_WALLET)"
+	@echo ""
+	@if [ "$(NETWORK)" = "testnet" ]; then \
+		CHAIN_ID="stellar:testnet"; \
+	elif [ "$(NETWORK)" = "mainnet" ]; then \
+		CHAIN_ID="stellar:mainnet"; \
+	else \
+		echo "Error: NETWORK must be 'testnet' or 'mainnet'"; \
+		exit 1; \
+	fi; \
+	echo "Chain ID:       $$CHAIN_ID"; \
+	echo ""; \
+	echo "⚠️  Deploying contract... Press Ctrl+C to cancel..."; \
+	sleep 2; \
+	stellar contract deploy \
+		--source-account $(SOURCE_ACCOUNT) \
+		--wasm target/wasm32v1-none/release/inter_token.wasm \
+		--network $(NETWORK) \
+		-- \
+		--owner $(OWNER) \
+		--system_wallet $(SYSTEM_WALLET) \
+		--current_chain_id $$CHAIN_ID | tee /tmp/contract_deployment.txt
+	@echo ""
+	@echo "✅ Deployment completed!"
+	@echo ""
+	@echo "Contract ID saved to /tmp/contract_deployment.txt"
+	@echo "Save this contract ID for future interactions!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Save the contract ID"
+	@echo "  2. Test contract functions"
+
+# Build and deploy in one command
+# Usage: make deploy-complete NETWORK=testnet SOURCE_ACCOUNT=admin OWNER=admin SYSTEM_WALLET=admin
+deploy-complete: deploy
+	@echo ""
+	@echo "✅ Build and deployment complete!"
+
+# ============================================================================
+# UPGRADE COMMANDS
+# ============================================================================
+
+# Upload WASM to network and get hash
+# Usage: make upload-wasm NETWORK=testnet SOURCE_ACCOUNT=admin
+upload-wasm: build
+	@if [ -z "$(NETWORK)" ] || [ -z "$(SOURCE_ACCOUNT)" ]; then \
+		echo "Error: Missing required parameters"; \
+		echo "Usage: make upload-wasm NETWORK=<network> SOURCE_ACCOUNT=<account>"; \
+		echo ""; \
+		echo "Example:"; \
+		echo "  make upload-wasm NETWORK=testnet SOURCE_ACCOUNT=admin"; \
+		exit 1; \
+	fi
+	@echo "Uploading WASM to $(NETWORK)..."
+	@echo ""
+	@stellar contract upload \
+		--source-account $(SOURCE_ACCOUNT) \
+		--wasm target/wasm32v1-none/release/inter_token.wasm \
+		--network $(NETWORK) | tee /tmp/wasm_hash.txt
+	@echo ""
+	@echo "✅ WASM uploaded successfully!"
+	@echo "WASM Hash saved to /tmp/wasm_hash.txt"
+	@echo ""
+	@echo "To upgrade the contract, use:"
+	@echo "  make upgrade-contract CONTRACT_ID=<id> NETWORK=$(NETWORK) SOURCE_ACCOUNT=$(SOURCE_ACCOUNT) WASM_HASH=\$$(cat /tmp/wasm_hash.txt)"
+
+# Upgrade contract with new WASM hash
+# Usage: make upgrade-contract CONTRACT_ID=... NETWORK=testnet SOURCE_ACCOUNT=admin WASM_HASH=...
+upgrade-contract:
+	@if [ -z "$(CONTRACT_ID)" ] || [ -z "$(NETWORK)" ] || [ -z "$(SOURCE_ACCOUNT)" ] || [ -z "$(WASM_HASH)" ]; then \
+		echo "Error: Missing required parameters"; \
+		echo "Usage: make upgrade-contract CONTRACT_ID=<id> NETWORK=<network> SOURCE_ACCOUNT=<account> WASM_HASH=<hash>"; \
+		echo ""; \
+		echo "Example:"; \
+		echo "  make upgrade-contract CONTRACT_ID=CALC65... NETWORK=testnet SOURCE_ACCOUNT=admin WASM_HASH=92065e82..."; \
+		exit 1; \
+	fi
+	@echo "Upgrading contract..."
+	@echo "Contract ID:    $(CONTRACT_ID)"
+	@echo "Network:        $(NETWORK)"
+	@echo "Source Account: $(SOURCE_ACCOUNT)"
+	@echo "WASM Hash:      $(WASM_HASH)"
 	@echo ""
 	@echo "⚠️  This will upgrade the contract. Press Ctrl+C to cancel..."
 	@sleep 3
 	@stellar contract invoke \
 		--id $(CONTRACT_ID) \
-		--source-account $(ADMIN) \
+		--source-account $(SOURCE_ACCOUNT) \
 		--network $(NETWORK) \
 		-- \
 		upgrade \
 		--new_wasm_hash $(WASM_HASH) \
-		--operator $(ADMIN)
+		--caller $(SOURCE_ACCOUNT)
 	@echo ""
-	@echo "✅ Upgrade completed successfully!"
+	@echo "✅ Contract upgraded successfully!"
+	@echo ""
+	@echo "Verify the upgrade:"
 
-# Perform atomic upgrade with migration
-# Usage: make upgrade-atomic NETWORK=testnet UPGRADER_ID=... CONTRACT_ID=... ADMIN=... WASM_HASH=...
-upgrade-atomic:
-	@if [ -z "$(NETWORK)" ] || [ -z "$(UPGRADER_ID)" ] || [ -z "$(CONTRACT_ID)" ] || [ -z "$(ADMIN)" ] || [ -z "$(WASM_HASH)" ]; then \
+# Complete upgrade workflow (build, upload, upgrade)
+# Usage: make upgrade-complete CONTRACT_ID=... NETWORK=testnet SOURCE_ACCOUNT=admin
+upgrade-complete: build
+	@if [ -z "$(CONTRACT_ID)" ] || [ -z "$(NETWORK)" ] || [ -z "$(SOURCE_ACCOUNT)" ]; then \
 		echo "Error: Missing required parameters"; \
-		echo "Usage: make upgrade-atomic NETWORK=testnet UPGRADER_ID=... CONTRACT_ID=... ADMIN=... WASM_HASH=..."; \
+		echo "Usage: make upgrade-complete CONTRACT_ID=<id> NETWORK=<network> SOURCE_ACCOUNT=<account>"; \
 		exit 1; \
 	fi
-	@echo "Performing atomic upgrade with migration..."
-	@echo "Network:       $(NETWORK)"
-	@echo "Upgrader ID:   $(UPGRADER_ID)"
-	@echo "Contract ID:   $(CONTRACT_ID)"
-	@echo "Admin:         $(ADMIN)"
-	@echo "WASM Hash:     $(WASM_HASH)"
+	@echo "Starting complete upgrade workflow..."
 	@echo ""
-	@echo "⚠️  This will upgrade and migrate the contract. Press Ctrl+C to cancel..."
-	@sleep 3
-	@stellar contract invoke \
-		--id $(UPGRADER_ID) \
-		--source-account $(ADMIN) \
+	@echo "Step 1: Uploading WASM..."
+	@WASM_HASH=$$(stellar contract upload \
+		--source-account $(SOURCE_ACCOUNT) \
+		--wasm target/wasm32v1-none/release/inter_token.wasm \
+		--network $(NETWORK)); \
+	echo "WASM Hash: $$WASM_HASH"; \
+	echo ""; \
+	echo "Step 2: Upgrading contract..."; \
+	sleep 2; \
+	stellar contract invoke \
+		--id $(CONTRACT_ID) \
+		--source-account $(SOURCE_ACCOUNT) \
 		--network $(NETWORK) \
 		-- \
-		upgrade_and_migrate \
-		--contract_address $(CONTRACT_ID) \
-		--operator $(ADMIN) \
-		--wasm_hash $(WASM_HASH) \
-		--migration_data '[{"version": 1}]'
+		upgrade \
+		--new_wasm_hash $$WASM_HASH \
+		--caller $(SOURCE_ACCOUNT)
 	@echo ""
-	@echo "✅ Atomic upgrade completed successfully!"
+	@echo "✅ Complete upgrade workflow finished!"
 
-# Verify upgrade was successful
-# Usage: make verify-upgrade NETWORK=testnet CONTRACT_ID=...
-verify-upgrade:
-	@if [ -z "$(NETWORK)" ] || [ -z "$(CONTRACT_ID)" ]; then \
-		echo "Error: Missing required parameters"; \
-		echo "Usage: make verify-upgrade NETWORK=testnet CONTRACT_ID=..."; \
-		exit 1; \
-	fi
-	@echo "Verifying upgrade..."
-	@echo ""
-	@echo "Contract Info:"
-	@stellar contract info \
-		--id $(CONTRACT_ID) \
-		--network $(NETWORK)
-	@echo ""
-	@echo "✅ Verification complete!"
+# ============================================================================
+# BRIDGE OPERATION COMMANDS
+# ============================================================================
 
 execute-bridge-operation:
 	@echo "Executing bridge operation..."

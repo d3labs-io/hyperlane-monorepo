@@ -8,7 +8,6 @@ describe("Security Tests", function () {
   let owner: SignerWithAddress;
   let admin: SignerWithAddress;
   let systemWallet: SignerWithAddress;
-  let vaultWallet: SignerWithAddress;
   let attacker: SignerWithAddress;
   let user1: SignerWithAddress;
   let user2: SignerWithAddress;
@@ -30,7 +29,7 @@ describe("Security Tests", function () {
   }
 
   beforeEach(async function () {
-    [owner, admin, systemWallet, vaultWallet, attacker, user1, user2, invalidCaller] = await ethers.getSigners();
+    [owner, admin, systemWallet, attacker, user1, user2, invalidCaller] = await ethers.getSigners();
 
     // Deploy tokens
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
@@ -54,7 +53,6 @@ describe("Security Tests", function () {
 
     // Setup
     await bridge.connect(owner).grantAdmin(admin.address);
-    await bridge.connect(admin).setVaultWallet(vaultWallet.address);
 
     // Mint tokens
     await token.mint(attacker.address, ethers.parseEther("1000"));
@@ -473,84 +471,6 @@ describe("Security Tests", function () {
     });
   });
 
-  // describe("Authorization Bypass Attempts", function () {
-  //   it("Should prevent non-system wallet from releasing tokens", async function () {
-  //     // Lock tokens first
-  //     await bridge.connect(user1).executeBridgeOperation(
-  //       0, // LOCK_WITH_FEE
-  //       {
-  //         fromToken: token.target.toString(),
-  //         toToken: "",
-  //         amount: ethers.parseEther("100"),
-  //         fromAddress: user1.address,
-  //         toAddress: user1.address,
-  //         fromNetwork: CURRENT_CHAIN_ID,
-  //         toNetwork: DESTINATION_CHAIN_ID,
-  //         transactionId: getUniqueTxId(),
-  //         email: "user1@test.com",
-  //         refund: {
-  //           feeToken: ethers.ZeroAddress,
-  //           feeAmount: 0
-  //         }
-  //       }
-  //     );
-
-  //     // Attacker tries to release - should revert with AccessControl error
-  //     await expect(
-  //       bridge.connect(attacker).executeBridgeOperation(
-  //         2, // RELEASE
-  //         {
-  //           fromToken: "",
-  //           toToken: token.target.toString(),
-  //           amount: ethers.parseEther("100"),
-  //           fromAddress: user1.address,
-  //           toAddress: attacker.address,
-  //           fromNetwork: SOURCE_CHAIN_ID,
-  //           toNetwork: CURRENT_CHAIN_ID,
-  //           transactionId: getUniqueTxId(),
-  //           email: "attacker@test.com",
-  //           refund: {
-  //             feeToken: feeToken.target,
-  //             feeAmount: FEE_AMOUNT
-  //           }
-  //         }
-  //       )
-  //     ).to.be.reverted; // OpenZeppelin AccessControl will revert
-  //   });
-
-  //   it("Should prevent non-admin from pausing", async function () {
-  //     await expect(
-  //       bridge.connect(attacker).pause("test pause")
-  //     ).to.be.revertedWithCustomError(bridge, "NotAdmin");
-  //   });
-
-  //   it("Should prevent non-admin from setting fee", async function () {
-  //     await expect(
-  //       bridge.connect(attacker).setFee(feeToken.target,(ethers.parseEther("1")))
-  //     ).to.be.revertedWithCustomError(bridge, "NotAdmin");
-  //   });
-
-  //   it("Should prevent non-admin from setting vault wallet", async function () {
-  //     await expect(
-  //       bridge.connect(attacker).setVaultWallet(attacker.address)
-  //     ).to.be.revertedWithCustomError(bridge, "NotAdmin");
-  //   });
-
-  //   it("Should prevent non-admin from granting admin", async function () {
-  //     // grantAdmin requires ADMIN_ROLE or OWNER_ROLE
-  //     await expect(
-  //       bridge.connect(attacker).grantAdmin(attacker.address)
-  //     ).to.be.revertedWithCustomError(bridge, "NotAdmin");
-  //   });
-
-  //   it("Should prevent non-owner from updating owner", async function () {
-  //     // updateOwner requires OWNER_ROLE
-  //     await expect(
-  //       bridge.connect(attacker).updateOwner(attacker.address)
-  //     ).to.be.reverted; // OpenZeppelin AccessControl will revert
-  //   });
-  // });
-
   describe("Input Validation Attacks", function () {
     it("Should reject zero address for token", async function () {
       await expect(
@@ -748,7 +668,6 @@ describe("Security Tests", function () {
 
       // Setup
       await bridge2.connect(owner).grantAdmin(admin.address);
-      await bridge2.connect(admin).setVaultWallet(vaultWallet.address);
 
       // Mint tokens to user1 for this bridge
       await token.mint(user1.address, ethers.parseEther("1000"));
@@ -782,7 +701,7 @@ describe("Security Tests", function () {
       // Try to withdraw when balance == locked
       await expect(
         bridge2.connect(admin).withdrawTreasury(token.target, user1.address)
-      ).to.be.revertedWithCustomError(bridge2, "InvalidAmount");
+      ).to.be.revertedWithCustomError(bridge2, "AmountUnderflow");
     });
 
     it("Should revert withdrawTreasury() when withdrawable amount is 0", async function () {
@@ -803,7 +722,6 @@ describe("Security Tests", function () {
 
       // Setup
       await bridge3.connect(owner).grantAdmin(admin.address);
-      await bridge3.connect(admin).setVaultWallet(vaultWallet.address);
 
       // Mint tokens to user1 for this bridge
       await token.mint(user1.address, ethers.parseEther("1000"));
@@ -837,7 +755,7 @@ describe("Security Tests", function () {
       // Try to withdraw when balance == locked (amount == 0)
       await expect(
         bridge3.connect(admin).withdrawTreasury(token.target, user1.address)
-      ).to.be.revertedWithCustomError(bridge3, "InvalidAmount");
+      ).to.be.revertedWithCustomError(bridge3, "AmountUnderflow");
     });
   });
 
@@ -893,53 +811,52 @@ describe("Security Tests", function () {
         bridge.connect(user1).executeBridgeOperation(0, bridgeData)
       ).to.not.be.reverted;
     });
-
-    it("Should skip fee collection when vaultWallet is not set", async function () {
-      // Create a new bridge instance without vault wallet set
-      const TokenBridgeFactory = await ethers.getContractFactory("TokenBridge");
-      const bridgeImpl2 = await TokenBridgeFactory.deploy();
-
-      const BridgeProxyFactory = await ethers.getContractFactory("BridgeProxy");
-      const initData2 = bridgeImpl2.interface.encodeFunctionData("initialize", [
-        owner.address,
-        systemWallet.address,
-        feeToken.target,
-        FEE_AMOUNT,
-        CURRENT_CHAIN_ID,
-      ]);
-      const proxy2 = await BridgeProxyFactory.deploy(bridgeImpl2.target, initData2);
-      const bridge2 = TokenBridgeFactory.attach(proxy2.target) as TokenBridge;
-
-      // Grant admin role
-      await bridge2.connect(owner).grantAdmin(admin.address);
-
-      // Don't set vault wallet - it should be address(0) by default
-
-      // Mint tokens to user1 for this bridge
-      await token.mint(user1.address, ethers.parseEther("1000"));
-      await token.connect(user1).approve(bridge2.target, ethers.MaxUint256);
-
-      const bridgeData = {
-        fromToken: token.target.toString(),
-        toToken: "",
-        amount: ethers.parseEther("100"),
-        fromAddress: user1.address,
-        toAddress: user2.address,
-        fromNetwork: CURRENT_CHAIN_ID,
-        toNetwork: DESTINATION_CHAIN_ID,
-        transactionId: getUniqueTxId(),
-        email: "test@example.com",
-        refund: {
-          feeToken: ethers.ZeroAddress,
-          feeAmount: 0
+    it("Should abort fee collection when treasure has been withdrawn", async function () {
+      await bridge.connect(user1).executeBridgeOperation(
+        0, // LOCK_WITH_FEE
+        {
+          fromToken: token.target.toString(),
+          toToken: "",
+          amount: ethers.parseEther("100"),
+          fromAddress: user1.address,
+          toAddress: user1.address,
+          fromNetwork: CURRENT_CHAIN_ID,
+          toNetwork: DESTINATION_CHAIN_ID,
+          transactionId: getUniqueTxId(),
+          email: "user1@test.com",
+          refund: {
+            feeToken: ethers.ZeroAddress,
+            feeAmount: 0
+          }
         }
-      };
+      );
 
-      // Should succeed without fee collection (vault wallet is not set)
-      await expect(
-        bridge2.connect(user1).executeBridgeOperation(0, bridgeData)
-      ).to.not.be.reverted;
+      const fee = await bridge.getAccumulatedFee(feeToken.target);
+      expect(fee).to.equal(FEE_AMOUNT);
+
+      await bridge.connect(admin).withdrawTreasury(feeToken.target, admin.address);
+
+      // Try to refund to user
+      await expect(bridge.connect(systemWallet).executeBridgeOperation(
+        2, // RELEASE
+        {
+          fromToken: "",
+          toToken: token.target.toString(),
+          amount: ethers.parseEther("100"),
+          fromAddress: user1.address,
+          toAddress: user1.address,
+          fromNetwork: DESTINATION_CHAIN_ID,
+          toNetwork: CURRENT_CHAIN_ID,
+          transactionId: getUniqueTxId(),
+          email: "user1@test.com",
+          refund: {
+            feeToken: feeToken.target,
+            feeAmount: FEE_AMOUNT
+          }
+        }
+      )).to.be.revertedWithCustomError(bridge, "FeeUnderflow");
     });
+      
   });
 
   describe("Pausable Functionality", function () {

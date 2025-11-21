@@ -8,7 +8,6 @@ describe("Core Bridge Functionality Tests", function () {
   let owner: SignerWithAddress;
   let admin: SignerWithAddress;
   let systemWallet: SignerWithAddress;
-  let vaultWallet: SignerWithAddress;
   let user1: SignerWithAddress;
   let user2: SignerWithAddress;
   
@@ -28,7 +27,7 @@ describe("Core Bridge Functionality Tests", function () {
   }
 
   beforeEach(async function () {
-    [owner, admin, systemWallet, vaultWallet, user1, user2] = await ethers.getSigners();
+    [owner, admin, systemWallet, user1, user2] = await ethers.getSigners();
 
     // Deploy tokens
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
@@ -58,7 +57,6 @@ describe("Core Bridge Functionality Tests", function () {
 
     // Setup roles and vault
     await bridge.connect(owner).grantAdmin(admin.address);
-    await bridge.connect(admin).setVaultWallet(vaultWallet.address);
 
     // Mint tokens to users
     await lockReleaseToken.mint(user1.address, ethers.parseEther("1000"));
@@ -175,6 +173,8 @@ describe("Core Bridge Functionality Tests", function () {
 
       const lockedBefore = await bridge.getLockedBalance(lockReleaseToken.target);
       const balanceBefore = await lockReleaseToken.balanceOf(user2.address);
+      let accumulated_fee = await bridge.getAccumulatedFee(feeToken.target);
+      expect(accumulated_fee).to.equal(FEE_AMOUNT);
 
       // Release to user2
       await bridge.connect(systemWallet).executeBridgeOperation(
@@ -199,6 +199,8 @@ describe("Core Bridge Functionality Tests", function () {
 
       expect(await lockReleaseToken.balanceOf(user2.address)).to.equal(balanceBefore + amount);
       expect(await bridge.getLockedBalance(lockReleaseToken.target)).to.equal(lockedBefore - amount);
+      accumulated_fee = await bridge.getAccumulatedFee(feeToken.target);
+      expect(accumulated_fee).to.equal(0);
     });
 
     it("Should prevent releasing more than locked balance", async function () {
@@ -364,6 +366,8 @@ describe("Core Bridge Functionality Tests", function () {
       );
 
       expect(await burnMintToken_Source.balanceOf(user1.address)).to.equal(balanceBefore - amount);
+      const accumulated_fee = await bridge.getAccumulatedFee(feeToken.target);
+      expect(accumulated_fee).to.equal(FEE_AMOUNT);
     });
 
     it("Should mint tokens to user", async function () {

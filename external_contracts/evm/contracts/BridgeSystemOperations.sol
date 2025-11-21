@@ -58,6 +58,11 @@ abstract contract BridgeSystemOperations is BridgeStorage {
         IERC20(_token).safeTransfer(_recipient, amount);
 
         if (refund.feeToken != address(0) && refund.feeAmount != 0){
+            // Check underflow before update
+            if (accumulatedFees[refund.feeToken] < refund.feeAmount) revert FeeUnderflow();
+
+            accumulatedFees[refund.feeToken] -= refund.feeAmount;
+
             // Refund fee to user
             IERC20(refund.feeToken).safeTransfer(_recipient, refund.feeAmount);
 
@@ -70,7 +75,7 @@ abstract contract BridgeSystemOperations is BridgeStorage {
             fromToken,
             toToken,
             amount,
-            0,
+            0, // No fee collected for release operation
             sourceAddress,
             recipient,
             sourceChainId,
@@ -78,7 +83,7 @@ abstract contract BridgeSystemOperations is BridgeStorage {
             transactionId,
             email,
             msg.sender,
-            address(0)
+            address(0) // No fee token collected for release operation
         );
     }
 
@@ -120,6 +125,11 @@ abstract contract BridgeSystemOperations is BridgeStorage {
         IERC20Mintable(_token).mint(_recipient, amount);
 
         if (refund.feeToken != address(0) && refund.feeAmount != 0){
+            // Check underflow before update
+            if (accumulatedFees[refund.feeToken] < refund.feeAmount) revert FeeUnderflow();
+
+            accumulatedFees[refund.feeToken] -= refund.feeAmount;
+
             // Refund fee to user
             IERC20(refund.feeToken).safeTransfer(_recipient, refund.feeAmount);
 
@@ -133,7 +143,7 @@ abstract contract BridgeSystemOperations is BridgeStorage {
             fromToken,
             toToken,
             amount,
-            0,
+            0, // No fee collected for mint operation
             sourceAddress,
             recipient,
             sourceChainId,
@@ -141,7 +151,7 @@ abstract contract BridgeSystemOperations is BridgeStorage {
             transactionId,
             email,
             msg.sender,
-            address(0)
+            address(0) // No fee token collected for mint operation
         );
     }
 }

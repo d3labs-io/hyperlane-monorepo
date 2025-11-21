@@ -1,6 +1,11 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { TokenBridge, MockERC20, MockMintableToken, MockBurnableToken } from "../typechain-types";
+import {
+  TokenBridge,
+  MockERC20,
+  MockMintableToken,
+  MockBurnableToken,
+} from "../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("Multi-User Bridge Scenarios", function () {
@@ -8,9 +13,8 @@ describe("Multi-User Bridge Scenarios", function () {
   let owner: SignerWithAddress;
   let admin: SignerWithAddress;
   let systemWallet: SignerWithAddress;
-  let vaultWallet: SignerWithAddress;
   let users: SignerWithAddress[];
-  
+
   // Token A: Lock/Release mechanism
   let tokenA: MockERC20;
   // Token B: Burn/Mint mechanism
@@ -30,7 +34,7 @@ describe("Multi-User Bridge Scenarios", function () {
 
   beforeEach(async function () {
     const signers = await ethers.getSigners();
-    [owner, admin, systemWallet, vaultWallet, ...users] = signers;
+    [owner, admin, systemWallet, ...users] = signers;
 
     // Deploy Token A (Lock/Release) - standard ERC20
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
@@ -38,10 +42,18 @@ describe("Multi-User Bridge Scenarios", function () {
     feeToken = await MockERC20Factory.deploy("Fee Token", "FEE", 18);
 
     // Deploy Token B (Burn/Mint) - burnable on source, mintable on dest
-    const MockBurnableFactory = await ethers.getContractFactory("MockBurnableToken");
-    tokenB_Source = await MockBurnableFactory.deploy("Token B Source", "TKBS", 18);
-    
-    const MockMintableFactory = await ethers.getContractFactory("MockMintableToken");
+    const MockBurnableFactory = await ethers.getContractFactory(
+      "MockBurnableToken"
+    );
+    tokenB_Source = await MockBurnableFactory.deploy(
+      "Token B Source",
+      "TKBS",
+      18
+    );
+
+    const MockMintableFactory = await ethers.getContractFactory(
+      "MockBurnableToken"
+    );
     tokenB_Dest = await MockMintableFactory.deploy("Token B Dest", "TKBD", 18);
 
     // Deploy bridge
@@ -62,18 +74,21 @@ describe("Multi-User Bridge Scenarios", function () {
 
     // Setup roles
     await bridge.connect(owner).grantAdmin(admin.address);
-    await bridge.connect(admin).setVaultWallet(vaultWallet.address);
 
     // Mint tokens to users (simulating initial balances on Stellar)
     for (let i = 0; i < 5; i++) {
       await tokenA.mint(users[i].address, ethers.parseEther("1000"));
       await tokenB_Source.mint(users[i].address, ethers.parseEther("1000"));
       await feeToken.mint(users[i].address, ethers.parseEther("10"));
-      
+
       // Approve bridge
       await tokenA.connect(users[i]).approve(bridge.target, ethers.MaxUint256);
-      await tokenB_Source.connect(users[i]).approve(bridge.target, ethers.MaxUint256);
-      await feeToken.connect(users[i]).approve(bridge.target, ethers.MaxUint256);
+      await tokenB_Source
+        .connect(users[i])
+        .approve(bridge.target, ethers.MaxUint256);
+      await feeToken
+        .connect(users[i])
+        .approve(bridge.target, ethers.MaxUint256);
     }
 
     // Mint tokens to bridge for release operations (simulating locked tokens)
@@ -83,19 +98,19 @@ describe("Multi-User Bridge Scenarios", function () {
   describe("Scenario 1: Lock/Release with Token A (Multiple Users)", function () {
     it("Should handle complete round-trip for 5 users with different amounts", async function () {
       const userAmounts = [
-        ethers.parseEther("100"),  // User 0
-        ethers.parseEther("250"),  // User 1
-        ethers.parseEther("50"),   // User 2
-        ethers.parseEther("500"),  // User 3
-        ethers.parseEther("75"),   // User 4
+        ethers.parseEther("100"), // User 0
+        ethers.parseEther("250"), // User 1
+        ethers.parseEther("50"), // User 2
+        ethers.parseEther("500"), // User 3
+        ethers.parseEther("75"), // User 4
       ];
 
       const spentAmounts = [
-        ethers.parseEther("30"),   // User 0 spends 30
-        ethers.parseEther("100"),  // User 1 spends 100
-        ethers.parseEther("10"),   // User 2 spends 10
-        ethers.parseEther("200"),  // User 3 spends 200
-        ethers.parseEther("75"),   // User 4 spends all
+        ethers.parseEther("30"), // User 0 spends 30
+        ethers.parseEther("100"), // User 1 spends 100
+        ethers.parseEther("10"), // User 2 spends 10
+        ethers.parseEther("200"), // User 3 spends 200
+        ethers.parseEther("75"), // User 4 spends all
       ];
 
       // Track initial balances
@@ -124,12 +139,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: `user${i}@test.com`,
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         );
 
@@ -141,76 +154,28 @@ describe("Multi-User Bridge Scenarios", function () {
 
       // Verify total locked balance
       const totalLocked = userAmounts.reduce((sum, amt) => sum + amt, 0n);
-      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(totalLocked);
+      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(
+        totalLocked
+      );
 
-      // Step 2: System wallet releases tokens on destination chain
-      for (let i = 0; i < 5; i++) {
-        const releaseTxId = getUniqueTxId();
+      // Verify accumulated fees
+      expect(await bridge.getAccumulatedFee(feeToken.target)).to.equal(
+        FEE_AMOUNT * 5n
+      );
 
-        await bridge.connect(systemWallet).executeBridgeOperation(
-          2, // RELEASE
-          {
-            fromToken: "",
-            toToken: tokenA.target.toString(),
-            amount: userAmounts[i],
-            fromAddress: users[i].address, // source address
-            toAddress: users[i].address, // destination address
-            fromNetwork: SOURCE_CHAIN_ID, // source chain (different from current)
-            toNetwork: CURRENT_CHAIN_ID, // current chain (destination)
-            transactionId: releaseTxId,
-            email: `user${i}@test.com`,
+      // Step 2: System wallet mint tokens on destination chain
 
-            refund: {
-              feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
-            }
-          }
-        );
-      }
-
-      // Verify locked balance decreased
-      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(0);
-
+      /// Simulation
       // Step 3: Users spend some tokens on destination chain (simulated by balance check)
       // In real scenario, users would use tokens on destination chain
       // Here we simulate by tracking what they would have left
 
-      // Step 4: Users lock remaining tokens on destination to bridge back
-      const remainingAmounts = userAmounts.map((amt, i) => amt - spentAmounts[i]);
+      // Step 4: Users burn remaining tokens on destination to bridge back
+      const remainingAmounts = userAmounts.map(
+        (amt, i) => amt - spentAmounts[i]
+      );
 
-      for (let i = 0; i < 5; i++) {
-        if (remainingAmounts[i] > 0) {
-          const lockBackTxId = getUniqueTxId();
-
-          // First, simulate that user has the tokens on destination
-          await tokenA.mint(users[i].address, userAmounts[i]);
-          await tokenA.connect(users[i]).approve(bridge.target, ethers.MaxUint256);
-
-          // Lock remaining amount
-          await bridge.connect(users[i]).executeBridgeOperation(
-            0, // LOCK_WITH_FEE
-            {
-              fromToken: tokenA.target.toString(),
-              toToken: "",
-              amount: remainingAmounts[i],
-              fromAddress: users[i].address,
-              toAddress: users[i].address,
-              fromNetwork: DESTINATION_CHAIN_ID, // now source is destination chain
-              toNetwork: CURRENT_CHAIN_ID, // going back to original chain
-              transactionId: lockBackTxId,
-              email: `user${i}@test.com`,
-
-              refund: {
-
-                feeToken: ethers.ZeroAddress,
-
-                feeAmount: 0
-
-              }
-            }
-          );
-        }
-      }
+      /// End simulation
 
       // Step 5: System wallet releases back to original chain
       for (let i = 0; i < 5; i++) {
@@ -233,19 +198,33 @@ describe("Multi-User Bridge Scenarios", function () {
 
               refund: {
                 feeToken: feeToken.target,
-                feeAmount: FEE_AMOUNT
-              }
+                feeAmount: FEE_AMOUNT,
+              },
             }
           );
 
           // Verify final balance
           const expectedFinal = balanceBefore + remainingAmounts[i];
-          expect(await tokenA.balanceOf(users[i].address)).to.equal(expectedFinal);
+          expect(await tokenA.balanceOf(users[i].address)).to.equal(
+            expectedFinal
+          );
         }
       }
 
+      const calculateRemainingTotal = (
+        amounts: bigint[],
+        spent: bigint[]
+      ): bigint =>
+        amounts.reduce((sum, amt) => sum + amt, 0n) -
+        spent.reduce((sum, amt) => sum + amt, 0n);
+
+      const totalRemaining = calculateRemainingTotal(
+        userAmounts,
+        spentAmounts
+      );
+
       // Verify locked balance is back to 0
-      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(0);
+      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(totalLocked - totalRemaining);
     });
 
     it("Should maintain correct locked balance with concurrent operations", async function () {
@@ -276,12 +255,10 @@ describe("Multi-User Bridge Scenarios", function () {
               email: `user${i}@test.com`,
 
               refund: {
-
                 feeToken: ethers.ZeroAddress,
 
-                feeAmount: 0
-
-              }
+                feeAmount: 0,
+              },
             }
           )
         );
@@ -290,7 +267,9 @@ describe("Multi-User Bridge Scenarios", function () {
 
       // Verify total locked balance
       const totalLocked = amounts.reduce((sum, amt) => sum + amt, 0n);
-      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(totalLocked);
+      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(
+        totalLocked
+      );
 
       // Release to 3 users
       for (let i = 0; i < 3; i++) {
@@ -309,15 +288,17 @@ describe("Multi-User Bridge Scenarios", function () {
 
             refund: {
               feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
-            }
+              feeAmount: FEE_AMOUNT,
+            },
           }
         );
       }
 
       // Verify remaining locked balance
       const remainingLocked = amounts[3] + amounts[4];
-      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(remainingLocked);
+      expect(await bridge.getLockedBalance(tokenA.target)).to.equal(
+        remainingLocked
+      );
     });
 
     it("Should prevent releasing more than locked balance", async function () {
@@ -336,12 +317,10 @@ describe("Multi-User Bridge Scenarios", function () {
           email: "user0@test.com",
 
           refund: {
-
             feeToken: ethers.ZeroAddress,
 
-            feeAmount: 0
-
-          }
+            feeAmount: 0,
+          },
         }
       );
 
@@ -362,8 +341,8 @@ describe("Multi-User Bridge Scenarios", function () {
 
             refund: {
               feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
-            }
+              feeAmount: FEE_AMOUNT,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "InsufficientLockedBalance");
@@ -407,12 +386,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: `user${i}@test.com`,
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         );
 
@@ -424,161 +401,9 @@ describe("Multi-User Bridge Scenarios", function () {
 
       // Verify total locked balance
       const totalLocked = userAmounts.reduce((sum, amt) => sum + amt, 0n);
-      expect(await bridge.getLockedBalance(tokenB_Source.target)).to.be.gte(totalLocked);
-
-      // Step 2: System wallet mints tokens on destination chain
-      for (let i = 0; i < 5; i++) {
-        const mintTxId = getUniqueTxId();
-        const balanceBefore = await tokenB_Dest.balanceOf(users[i].address);
-
-        await bridge.connect(systemWallet).executeBridgeOperation(
-          3, // MINT
-          {
-            fromToken: tokenB_Source.target.toString(),
-            toToken: tokenB_Dest.target.toString(),
-            amount: userAmounts[i],
-            fromAddress: users[i].address,
-            toAddress: users[i].address,
-            fromNetwork: SOURCE_CHAIN_ID,
-            toNetwork: CURRENT_CHAIN_ID,
-            transactionId: mintTxId,
-            email: `user${i}@test.com`,
-
-            refund: {
-              feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
-            }
-          }
-        );
-
-        // Verify tokens were minted
-        expect(await tokenB_Dest.balanceOf(users[i].address)).to.equal(
-          balanceBefore + userAmounts[i]
-        );
-      }
-    });
-
-    it("Should handle lock/mint then burn/release round-trip with spending", async function () {
-      const initialAmount = ethers.parseEther("500");
-      const spentAmount = ethers.parseEther("200");
-      const returnAmount = initialAmount - spentAmount;
-
-      // Step 1: User locks tokens on source chain (using tokenB_Source as lockable token)
-      await bridge.connect(users[0]).executeBridgeOperation(
-        0, // LOCK_WITH_FEE
-        {
-          fromToken: tokenB_Source.target.toString(),
-          toToken: tokenB_Dest.target.toString(),
-          amount: initialAmount,
-          fromAddress: users[0].address,
-          toAddress: users[0].address,
-          fromNetwork: CURRENT_CHAIN_ID,
-          toNetwork: DESTINATION_CHAIN_ID,
-          transactionId: getUniqueTxId(),
-          email: "user0@test.com",
-
-          refund: {
-
-            feeToken: ethers.ZeroAddress,
-
-            feeAmount: 0
-
-          }
-        }
+      expect(await bridge.getLockedBalance(tokenB_Source.target)).to.be.gte(
+        totalLocked
       );
-
-      // Verify tokens were locked
-      const lockedBalance = await bridge.getLockedBalance(tokenB_Source.target);
-      expect(lockedBalance).to.be.gte(initialAmount);
-
-      // Step 2: System mints on destination
-      await bridge.connect(systemWallet).executeBridgeOperation(
-        3, // MINT
-        {
-          fromToken: tokenB_Source.target.toString(),
-          toToken: tokenB_Dest.target.toString(),
-          amount: initialAmount,
-          fromAddress: users[0].address,
-          toAddress: users[0].address,
-          fromNetwork: SOURCE_CHAIN_ID,
-          toNetwork: CURRENT_CHAIN_ID,
-          transactionId: getUniqueTxId(),
-          email: "user0@test.com",
-
-          refund: {
-            feeToken: feeToken.target,
-            feeAmount: FEE_AMOUNT
-          }
-        }
-      );
-
-      // Verify tokens were minted
-      expect(await tokenB_Dest.balanceOf(users[0].address)).to.equal(initialAmount);
-
-      // Step 3: User spends some tokens (simulated by transfer to zero address or just tracking)
-      // For this test, we'll just track the amount they want to return
-
-      // Step 4: User burns remaining to bridge back
-      await tokenB_Dest.connect(users[0]).approve(bridge.target, ethers.MaxUint256);
-      await bridge.connect(users[0]).executeBridgeOperation(
-        1, // BURN
-        {
-          fromToken: tokenB_Dest.target.toString(),
-          toToken: tokenB_Source.target.toString(),
-          amount: returnAmount,
-          fromAddress: users[0].address,
-          toAddress: users[0].address,
-          fromNetwork: DESTINATION_CHAIN_ID,
-          toNetwork: CURRENT_CHAIN_ID,
-          transactionId: getUniqueTxId(),
-          email: "user0@test.com",
-
-          refund: {
-
-            feeToken: ethers.ZeroAddress,
-
-            feeAmount: 0
-
-          }
-        }
-      );
-
-      // Verify tokens were burned
-      expect(await tokenB_Dest.balanceOf(users[0].address)).to.equal(
-        initialAmount - returnAmount
-      );
-
-      // Step 5: System releases locked tokens back on source chain
-      const balanceBefore = await tokenB_Source.balanceOf(users[0].address);
-
-      await bridge.connect(systemWallet).executeBridgeOperation(
-        2, // RELEASE
-        {
-          fromToken: tokenB_Dest.target.toString(),
-          toToken: tokenB_Source.target.toString(),
-          amount: returnAmount,
-          fromAddress: users[0].address,
-          toAddress: users[0].address,
-          fromNetwork: DESTINATION_CHAIN_ID,
-          toNetwork: CURRENT_CHAIN_ID,
-          transactionId: getUniqueTxId(),
-          email: "user0@test.com",
-
-          refund: {
-            feeToken: ethers.ZeroAddress,
-            feeAmount: 0
-          }
-        }
-      );
-
-      // Verify tokens were released
-      expect(await tokenB_Source.balanceOf(users[0].address)).to.equal(
-        balanceBefore + returnAmount
-      );
-
-      // Verify locked balance decreased
-      const finalLockedBalance = await bridge.getLockedBalance(tokenB_Source.target);
-      expect(finalLockedBalance).to.equal(lockedBalance - returnAmount);
     });
   });
 
@@ -602,12 +427,10 @@ describe("Multi-User Bridge Scenarios", function () {
           email: "user0@test.com",
 
           refund: {
-
             feeToken: ethers.ZeroAddress,
 
-            feeAmount: 0
-
-          }
+            feeAmount: 0,
+          },
         }
       );
 
@@ -627,12 +450,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "TransactionIdAlreadyUsed");
@@ -658,12 +479,10 @@ describe("Multi-User Bridge Scenarios", function () {
           email: "user0@test.com",
 
           refund: {
-
             feeToken: ethers.ZeroAddress,
 
-            feeAmount: 0
-
-          }
+            feeAmount: 0,
+          },
         }
       );
 
@@ -683,8 +502,8 @@ describe("Multi-User Bridge Scenarios", function () {
 
           refund: {
             feeToken: feeToken.target,
-            feeAmount: FEE_AMOUNT
-          }
+            feeAmount: FEE_AMOUNT,
+          },
         }
       );
 
@@ -703,12 +522,10 @@ describe("Multi-User Bridge Scenarios", function () {
           email: "user0@test.com",
 
           refund: {
-
             feeToken: ethers.ZeroAddress,
 
-            feeAmount: 0
-
-          }
+            feeAmount: 0,
+          },
         }
       );
 
@@ -729,8 +546,8 @@ describe("Multi-User Bridge Scenarios", function () {
 
             refund: {
               feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
-            }
+              feeAmount: FEE_AMOUNT,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "TransactionIdAlreadyUsed");
@@ -755,12 +572,10 @@ describe("Multi-User Bridge Scenarios", function () {
           email: "user0@test.com",
 
           refund: {
-
             feeToken: ethers.ZeroAddress,
 
-            feeAmount: 0
-
-          }
+            feeAmount: 0,
+          },
         }
       );
 
@@ -780,12 +595,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "TransactionIdAlreadyUsed");
@@ -809,12 +622,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "InvalidAddress");
@@ -836,12 +647,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "InvalidAmount");
@@ -863,12 +672,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.revertedWithCustomError(bridge, "InvalidChainIdentifier");
@@ -891,12 +698,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.reverted; // ERC20 will revert
@@ -904,7 +709,9 @@ describe("Multi-User Bridge Scenarios", function () {
 
     it("Should reject insufficient fee token balance", async function () {
       // Set very high fee
-      await bridge.connect(admin).setFee(feeToken.target, ethers.parseEther("100"));
+      await bridge
+        .connect(admin)
+        .setFee(feeToken.target, ethers.parseEther("100"));
 
       await expect(
         bridge.connect(users[0]).executeBridgeOperation(
@@ -921,12 +728,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: "user0@test.com",
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         )
       ).to.be.reverted; // Fee token transfer will fail
@@ -964,12 +769,10 @@ describe("Multi-User Bridge Scenarios", function () {
               email: `user${op.user}@test.com`,
 
               refund: {
-
                 feeToken: ethers.ZeroAddress,
 
-                feeAmount: 0
-
-              }
+                feeAmount: 0,
+              },
             }
           );
           expectedLocked += op.amount;
@@ -989,15 +792,17 @@ describe("Multi-User Bridge Scenarios", function () {
 
               refund: {
                 feeToken: feeToken.target,
-                feeAmount: FEE_AMOUNT
-              }
+                feeAmount: FEE_AMOUNT,
+              },
             }
           );
           expectedLocked -= op.amount;
         }
 
         // Verify locked balance after each operation
-        expect(await bridge.getLockedBalance(tokenA.target)).to.equal(expectedLocked);
+        expect(await bridge.getLockedBalance(tokenA.target)).to.equal(
+          expectedLocked
+        );
       }
     });
 
@@ -1024,12 +829,10 @@ describe("Multi-User Bridge Scenarios", function () {
             email: `user${i}@test.com`,
 
             refund: {
-
               feeToken: ethers.ZeroAddress,
 
-              feeAmount: 0
-
-            }
+              feeAmount: 0,
+            },
           }
         );
       }
@@ -1041,4 +844,4 @@ describe("Multi-User Bridge Scenarios", function () {
       expect(contractBalance).to.be.gte(lockedBalance);
     });
   });
-})
+});

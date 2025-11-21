@@ -3,10 +3,13 @@
 #[cfg(test)]
 mod tests;
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, Symbol, symbol_short, String};
 use soroban_sdk::token;
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, String, Symbol,
+};
 use stellar_access::access_control::{self as access_control, AccessControl};
-use stellar_contract_utils::pausable::{self as pausable, Pausable };
+use stellar_contract_utils::pausable::{self as pausable, Pausable};
 use stellar_contract_utils::upgradeable::UpgradeableInternal;
 use stellar_macros::{only_role, when_not_paused};
 
@@ -20,6 +23,12 @@ const ADMIN_ROLE: Symbol = symbol_short!("admin");
 
 /// System wallet role - Can execute Release and Mint operations
 const SYSTEM_WALLET_ROLE: Symbol = symbol_short!("sys_wlt");
+
+/// TTL threshold for extending TTL (5 days)
+const TTL_THRESHOLD: u32 = 86_400;
+
+/// Number of ledgers in 30 days (approx. 5s per ledger)
+const LEDGERS_PER_30_DAYS: u32 = 518_400;
 
 /// Bridge operation types matching EVM implementation
 #[contracttype]
@@ -52,7 +61,7 @@ pub struct TokenBridgeData {
     pub from_network: String,
     /// Destination chain identifier (CAIP-2 format)
     pub to_network: String,
-     /// Unique transaction identifier
+    /// Unique transaction identifier
     pub transaction_id: i128,
     /// Email address of the user (for KYC/AML purposes)
     pub email: String,
@@ -94,12 +103,12 @@ pub enum TokenBridgeError {
 #[derive(Clone)]
 pub enum DataKey {
     // Instance storage (configuration)
-    CurrentChainId,           // Current chain identifier
-    ProposedOwner,            // Proposed new owner (for 2-step ownership transfer)
+    CurrentChainId, // Current chain identifier
+    ProposedOwner,  // Proposed new owner (for 2-step ownership transfer)
 
     // Persistent storage (security-critical and financial state)
-    TransactionIds(i128),     // Used transaction IDs (replay protection)
-    LockedBalances(Address),  // Current locked token balances (MIGRATED to persistent)
+    TransactionIds(i128),    // Used transaction IDs (replay protection)
+    LockedBalances(Address), // Current locked token balances (MIGRATED to persistent)
 }
 
 #[contract]
@@ -118,8 +127,7 @@ impl TokenBridge {
         current_chain_id: String,
     ) {
         // Validate chain ID format (CAIP-2: namespace:reference)
-        Self::validate_chain_id(&current_chain_id)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::validate_chain_id(&current_chain_id).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Initialize AccessControl with owner as the contract admin
         access_control::set_admin(e, &owner);
@@ -131,7 +139,9 @@ impl TokenBridge {
         access_control::grant_role_no_auth(e, &owner, &system_wallet, &SYSTEM_WALLET_ROLE);
 
         // Set current chain ID
-        e.storage().instance().set(&DataKey::CurrentChainId, &current_chain_id);
+        e.storage()
+            .instance()
+            .set(&DataKey::CurrentChainId, &current_chain_id);
     }
 
     // ============ Internal Helper Functions ============
@@ -153,7 +163,10 @@ impl TokenBridge {
     /// @param e - The environment
     /// @param addr_str - The address string to validate and convert
     /// @return Result with Address or error
-    fn validate_and_convert_address(_e: &Env, addr_str: &String) -> Result<Address, TokenBridgeError> {
+    fn validate_and_convert_address(
+        _e: &Env,
+        addr_str: &String,
+    ) -> Result<Address, TokenBridgeError> {
         // Stellar addresses are 56 characters (G... format in base32)
         // Allow some flexibility for different address formats
         let len = addr_str.len();
@@ -241,7 +254,7 @@ impl TokenBridge {
     /// - Transaction IDs MUST survive contract upgrades
     /// - If instance storage was used, upgrade would clear all transaction IDs
     /// - Attacker could then replay old transactions after upgrade
-    /// - TTL extended to 1 year to prevent expiration-based replay attacks
+    /// - TTL extended to 30 days to prevent expiration-based replay attacks
     fn use_transaction_id(e: &Env, transaction_id: i128) -> Result<(), TokenBridgeError> {
         if Self::is_transaction_used(e, transaction_id) {
             return Err(TokenBridgeError::TransactionIdAlreadyUsed);
@@ -250,15 +263,12 @@ impl TokenBridge {
         let key = DataKey::TransactionIds(transaction_id);
 
         // Store transaction ID as used in PERSISTENT storage
-        e.storage()
-            .persistent()
-            .set(&key, &true);
+        e.storage().persistent().set(&key, &true);
 
-        // Extend TTL to 1 year (31,536,000 seconds)
-        // This prevents the entry from expiring and being reused
+        // Extend TTL to 30 days (518,400 ledgers)
         e.storage()
             .persistent()
-            .extend_ttl(&key, 31_536_000, 31_536_000);
+            .extend_ttl(&key, TTL_THRESHOLD, LEDGERS_PER_30_DAYS);
 
         Ok(())
     }
@@ -369,44 +379,37 @@ impl TokenBridge {
         caller: Address,
     ) {
         // Validate amount (includes > 0 check and max limit)
-        Self::validate_amount(amount)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::validate_amount(amount).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Validate and convert token address
         let from_token_address = Self::validate_and_convert_address(e, &from_token_id)
             .unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Check and mark transaction ID as used
-        Self::use_transaction_id(e, transaction_id)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::use_transaction_id(e, transaction_id).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Get current chain ID
-        let current_chain_id: String = e.storage()
+        let current_chain_id: String = e
+            .storage()
             .instance()
             .get(&DataKey::CurrentChainId)
             .unwrap_or(String::from_str(e, ""));
- 
 
         // Update locked balances (using persistent storage)
-        let current_balance: i128 = e.storage()
-            .persistent()
-            .get(&DataKey::LockedBalances(from_token_address.clone()))
-            .unwrap_or(0);
+        let balance_key = DataKey::LockedBalances(from_token_address.clone());
+        let current_balance: i128 = e.storage().persistent().get(&balance_key).unwrap_or(0);
 
         // Check for overflow
         if current_balance.checked_add(amount).is_none() {
             panic_with_error!(e, TokenBridgeError::AmountExceedsMaximum);
         }
 
-        let key = DataKey::LockedBalances(from_token_address.clone());
         e.storage()
             .persistent()
-            .set(&key, &(current_balance + amount));
+            .set(&balance_key, &(current_balance + amount));
 
-        // Extend TTL for locked balance entry (1 year)
-        e.storage()
-            .persistent()
-            .extend_ttl(&key, 31_536_000, 31_536_000);
+        // Extend TTL for locked balance entry (30 days)
+        Self::extend_ttl(e, TTL_THRESHOLD, LEDGERS_PER_30_DAYS, balance_key);
 
         // Transfer tokens from user to contract
         let client = token::TokenClient::new(e, &from_token_address);
@@ -416,7 +419,19 @@ impl TokenBridge {
         // Emit UserOperation event
         e.events().publish(
             (symbol_short!("locked"),),
-            (BridgeOperation::Lock as u32, from_token_id, to_token_id, amount, &caller , destination_address, current_chain_id, destination_chain, transaction_id, email, &caller)
+            (
+                BridgeOperation::Lock as u32,
+                from_token_id,
+                to_token_id,
+                amount,
+                &caller,
+                destination_address,
+                current_chain_id,
+                destination_chain,
+                transaction_id,
+                email,
+                &caller,
+            ),
         );
     }
 
@@ -433,19 +448,18 @@ impl TokenBridge {
         caller: Address,
     ) {
         // Validate amount (includes > 0 check and max limit)
-        Self::validate_amount(amount)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::validate_amount(amount).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Validate and convert token address
         let from_token_address = Self::validate_and_convert_address(e, &from_token_id)
             .unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Check and mark transaction ID as used
-        Self::use_transaction_id(e, transaction_id)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::use_transaction_id(e, transaction_id).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Get current chain ID
-        let current_chain_id: String = e.storage()
+        let current_chain_id: String = e
+            .storage()
             .instance()
             .get(&DataKey::CurrentChainId)
             .unwrap_or(String::from_str(e, ""));
@@ -457,8 +471,20 @@ impl TokenBridge {
 
         // Emit UserOperation event
         e.events().publish(
-            (symbol_short!("burned"), ),
-            (BridgeOperation::Burn as u32, from_token_id, to_token_id, amount, &caller, destination_address, current_chain_id, destination_chain, transaction_id, email, &caller)
+            (symbol_short!("burned"),),
+            (
+                BridgeOperation::Burn as u32,
+                from_token_id,
+                to_token_id,
+                amount,
+                &caller,
+                destination_address,
+                current_chain_id,
+                destination_chain,
+                transaction_id,
+                email,
+                &caller,
+            ),
         );
     }
 
@@ -478,48 +504,37 @@ impl TokenBridge {
         caller: Address,
     ) {
         // Validate amount (includes > 0 check and max limit)
-        Self::validate_amount(amount)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::validate_amount(amount).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Validate and convert token address
         let to_token_address = Self::validate_and_convert_address(e, &to_token_id)
             .unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Check and mark transaction ID as used
-        Self::use_transaction_id(e, transaction_id)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::use_transaction_id(e, transaction_id).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Get current chain ID
-        let current_chain_id: String = e.storage()
+        let current_chain_id: String = e
+            .storage()
             .instance()
             .get(&DataKey::CurrentChainId)
             .unwrap_or(String::from_str(e, ""));
 
-        // Prevent releasing on the same chain as source
-        // if source_chain == current_chain_id {
-        //     panic_with_error!(e, TokenBridgeError::InvalidReleaseOnSameChain);
-        // }
-
         // Check locked balance (using persistent storage)
-        let current_balance: i128 = e.storage()
-            .persistent()
-            .get(&DataKey::LockedBalances(to_token_address.clone()))
-            .unwrap_or(0);
+        let balance_key = DataKey::LockedBalances(to_token_address.clone());
+        let current_balance: i128 = e.storage().persistent().get(&balance_key).unwrap_or(0);
 
         if current_balance < amount {
             panic_with_error!(e, TokenBridgeError::InsufficientLockedBalance);
         }
 
         // Update locked balances
-        let key = DataKey::LockedBalances(to_token_address.clone());
         e.storage()
             .persistent()
-            .set(&key, &(current_balance - amount));
+            .set(&balance_key, &(current_balance - amount));
 
-        // Extend TTL for locked balance entry (1 year)
-        e.storage()
-            .persistent()
-            .extend_ttl(&key, 31_536_000, 31_536_000);
+        // Extend TTL for locked balance entry (30 days)
+        Self::extend_ttl(e, TTL_THRESHOLD, LEDGERS_PER_30_DAYS, balance_key);
 
         // Transfer tokens from contract to recipient
         let client = token::TokenClient::new(e, &to_token_address);
@@ -528,8 +543,20 @@ impl TokenBridge {
 
         // Emit SystemOperation event
         e.events().publish(
-            (symbol_short!("released"), ),
-            (BridgeOperation::Release as u32, from_token_id, to_token_id, amount, source_address, recipient, source_chain, current_chain_id, transaction_id, email, &caller)
+            (symbol_short!("unlocked"),),
+            (
+                BridgeOperation::Release as u32,
+                from_token_id,
+                to_token_id,
+                amount,
+                source_address,
+                recipient,
+                source_chain,
+                current_chain_id,
+                transaction_id,
+                email,
+                &caller,
+            ),
         );
     }
 
@@ -547,27 +574,21 @@ impl TokenBridge {
         caller: Address,
     ) {
         // Validate amount (includes > 0 check and max limit)
-        Self::validate_amount(amount)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::validate_amount(amount).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Validate and convert token address
         let to_token_address = Self::validate_and_convert_address(e, &to_token_id)
             .unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Check and mark transaction ID as used
-        Self::use_transaction_id(e, transaction_id)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::use_transaction_id(e, transaction_id).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Get current chain ID
-        let current_chain_id: String = e.storage()
+        let current_chain_id: String = e
+            .storage()
             .instance()
             .get(&DataKey::CurrentChainId)
             .unwrap_or(String::from_str(e, ""));
-
-        // Prevent minting on the same chain as source
-        // if source_chain == current_chain_id {
-        //     panic_with_error!(e, TokenBridgeError::InvalidReleaseOnSameChain);
-        // }
 
         // Mint tokens to recipient
         let client = token::StellarAssetClient::new(e, &to_token_address);
@@ -575,8 +596,20 @@ impl TokenBridge {
 
         // Emit SystemOperation event
         e.events().publish(
-            (symbol_short!("minted"), ),
-            (BridgeOperation::Mint as u32, from_token_id, to_token_id, amount, source_address, recipient, source_chain, current_chain_id, transaction_id, email, &caller)
+            (symbol_short!("minted"),),
+            (
+                BridgeOperation::Mint as u32,
+                from_token_id,
+                to_token_id,
+                amount,
+                source_address,
+                recipient,
+                source_chain,
+                current_chain_id,
+                transaction_id,
+                email,
+                &caller,
+            ),
         );
     }
 
@@ -593,7 +626,7 @@ impl TokenBridge {
         // Emit event
         e.events().publish(
             (symbol_short!("set_admin"), &admin_token, &new_admin),
-            &caller
+            &caller,
         );
     }
 
@@ -610,10 +643,8 @@ impl TokenBridge {
 
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("own_pro"), caller, new_owner),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("own_pro"), caller, new_owner), timestamp);
     }
 
     /// Accept ownership transfer
@@ -626,12 +657,10 @@ impl TokenBridge {
         caller.require_auth();
 
         // Get proposed owner - must exist
-        let proposed_owner: Option<Address> = e.storage()
-            .instance()
-            .get(&DataKey::ProposedOwner);
+        let proposed_owner: Option<Address> = e.storage().instance().get(&DataKey::ProposedOwner);
 
-        let proposed_owner = proposed_owner
-            .unwrap_or_else(|| panic_with_error!(e, TokenBridgeError::Unauthorized));
+        let proposed_owner =
+            proposed_owner.unwrap_or_else(|| panic_with_error!(e, TokenBridgeError::Unauthorized));
 
         // Check if caller is proposed owner
         if caller != proposed_owner {
@@ -649,16 +678,12 @@ impl TokenBridge {
         access_control::grant_role_no_auth(e, &current_owner, &proposed_owner, &OWNER_ROLE);
 
         // Clear proposed owner by removing the key
-        e.storage()
-            .instance()
-            .remove(&DataKey::ProposedOwner);
+        e.storage().instance().remove(&DataKey::ProposedOwner);
 
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("own_acc"), caller),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("own_acc"), caller), timestamp);
     }
 
     /// Grant admin role to an address
@@ -670,10 +695,8 @@ impl TokenBridge {
 
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("adm_grt"), caller, admin),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("adm_grt"), caller, admin), timestamp);
     }
 
     /// Revoke admin role from an address
@@ -685,10 +708,8 @@ impl TokenBridge {
 
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("adm_rvk"), caller, admin),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("adm_rvk"), caller, admin), timestamp);
     }
 
     /// Add a system wallet address (supports multiple system wallets)
@@ -698,8 +719,7 @@ impl TokenBridge {
         caller.require_auth();
 
         // Check if caller is admin or owner
-        Self::check_admin(e, &caller)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::check_admin(e, &caller).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Grant SYSTEM_WALLET_ROLE to new wallet (no auth needed, already checked above)
         access_control::grant_role_no_auth(e, &caller, &new_system_wallet, &SYSTEM_WALLET_ROLE);
@@ -708,7 +728,7 @@ impl TokenBridge {
         let timestamp = e.ledger().timestamp();
         e.events().publish(
             (symbol_short!("sys_add"), caller, new_system_wallet),
-            timestamp
+            timestamp,
         );
     }
 
@@ -719,18 +739,15 @@ impl TokenBridge {
         caller.require_auth();
 
         // Check if caller is admin or owner
-        Self::check_admin(e, &caller)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::check_admin(e, &caller).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Revoke SYSTEM_WALLET_ROLE from wallet (no auth needed, already checked above)
         access_control::revoke_role_no_auth(e, &caller, &system_wallet, &SYSTEM_WALLET_ROLE);
 
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("sys_rmv"), caller, system_wallet),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("sys_rmv"), caller, system_wallet), timestamp);
     }
 
     /// Update the system wallet address (legacy function for backward compatibility)
@@ -742,8 +759,7 @@ impl TokenBridge {
         caller.require_auth();
 
         // Check if caller is admin or owner
-        Self::check_admin(e, &caller)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
+        Self::check_admin(e, &caller).unwrap_or_else(|err| panic_with_error!(e, err));
 
         // Get old system wallet (find who has SYSTEM_WALLET_ROLE)
         let old_wallet_count = access_control::get_role_member_count(e, &SYSTEM_WALLET_ROLE);
@@ -761,7 +777,7 @@ impl TokenBridge {
         let timestamp = e.ledger().timestamp();
         e.events().publish(
             (symbol_short!("sys_upd"), caller.clone(), new_system_wallet),
-            timestamp
+            timestamp,
         );
     }
 
@@ -773,13 +789,14 @@ impl TokenBridge {
     #[only_role(caller, "owner")]
     pub fn upgrade(e: &Env, new_wasm_hash: soroban_sdk::BytesN<32>, caller: Address) {
         // Execute the upgrade
-        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        e.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
 
         // Emit event
         let timestamp = e.ledger().timestamp();
         e.events().publish(
             (symbol_short!("upgraded"), caller, new_wasm_hash),
-            timestamp
+            timestamp,
         );
     }
 
@@ -831,6 +848,11 @@ impl TokenBridge {
             .unwrap_or(0)
     }
 
+    /// Get the data key for a locked balance entry
+    pub fn get_locked_balance_data_key(token: Address) -> DataKey {
+        DataKey::LockedBalances(token)
+    }
+
     /// Check if an address is an admin (has ADMIN_ROLE or OWNER_ROLE)
     pub fn is_admin(e: &Env, account: Address) -> bool {
         // Check if owner
@@ -861,12 +883,18 @@ impl TokenBridge {
     }
 
     // Extend TTL of the contract
-    pub fn extend_ttl(e: &Env, threshold: u32, extend_to: u32) {
+    pub fn extend_ttl(e: &Env, threshold: u32, extend_to: u32, key: DataKey) {
+        e.storage().instance().extend_ttl(threshold, extend_to);
+
         e.storage()
-            .instance()
-            .extend_ttl(threshold, extend_to);
+            .persistent()
+            .extend_ttl(&key, threshold, extend_to);
     }
 
+    // Extend TTL of the contract instance
+    pub fn extend_ttl_instance(e: &Env, threshold: u32, extend_to: u32) {
+        e.storage().instance().extend_ttl(threshold, extend_to);
+    }
 }
 
 // ============ Pausable Implementation ============
@@ -879,36 +907,30 @@ impl Pausable for TokenBridge {
 
     fn pause(e: &Env, caller: Address) {
         caller.require_auth();
-        
+
         // Check if caller is admin or owner
-        Self::check_admin(e, &caller)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
-        
+        Self::check_admin(e, &caller).unwrap_or_else(|err| panic_with_error!(e, err));
+
         pausable::pause(e);
-        
+
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("pause"), caller),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("pause"), caller), timestamp);
     }
 
     fn unpause(e: &Env, caller: Address) {
         caller.require_auth();
-        
+
         // Check if caller is admin or owner
-        Self::check_admin(e, &caller)
-            .unwrap_or_else(|err| panic_with_error!(e, err));
-        
+        Self::check_admin(e, &caller).unwrap_or_else(|err| panic_with_error!(e, err));
+
         pausable::unpause(e);
-        
+
         // Emit event
         let timestamp = e.ledger().timestamp();
-        e.events().publish(
-            (symbol_short!("unpause"), caller),
-            timestamp
-        );
+        e.events()
+            .publish((symbol_short!("unpause"), caller), timestamp);
     }
 }
 
@@ -977,4 +999,3 @@ impl UpgradeableInternal for TokenBridge {
         }
     }
 }
-

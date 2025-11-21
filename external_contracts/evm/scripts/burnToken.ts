@@ -3,7 +3,7 @@ import { MockERC20, TokenBridge } from "../typechain-types";
 
 async function main() {
   // Get the deployer's address
-  const [deployer, user] = await ethers.getSigners();
+  const [user] = await ethers.getSigners();
 
   console.log("Deploying contracts with the account:", user.address);
   console.log(
@@ -13,8 +13,7 @@ async function main() {
 
   const proxyAddress = process.env.PROXY_ADDRESS || "";
   console.log("Proxy address:", proxyAddress);
-  const tokenAddress = process.env.MINT_TOKEN_ADDRESS || "";
-  console.log("Token address:", tokenAddress);
+  const tokenAddress = "0xeCacC484026a02022565496E088CA0581cC36373";
 
   const tokenBridge = await ethers.getContractAt(
     "TokenBridge",
@@ -35,13 +34,13 @@ async function main() {
   tx = await tokenBridge.connect(user).executeBridgeOperation(
     1,
     {
-      fromToken: "",
-      toToken: "CDBDKL3ZJB4ZJUFVFCPMJ3QDXIVMB2CYETEU2LEWTGDMIR4B4CQVO5GN",
-      amount: ethers.parseEther("0.001"),
-      fromAddress: "GCME6YKLF3YSCDRYSCVJRYAFFO3VA62IHZYZRH4B22I3S4LHFXQPJUM7",
-      toAddress: "0x8aA13A3CD59bc677829946EcC41d02510f600af0",
-      fromNetwork: "stellar:testnet",
-      toNetwork: "pruv:testnet",
+      fromToken: "0xeCacC484026a02022565496E088CA0581cC36373",
+      toToken: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+      amount: ethers.parseUnits("2", 6),
+      fromAddress: "0xCcA55A052F2140541b6650093890A0a21405dCc7",
+      toAddress: "GCME6YKLF3YSCDRYSCVJRYAFFO3VA62IHZYZRH4B22I3S4LHFXQPJUM7",
+      fromNetwork: "pruv:testnet",
+      toNetwork: "stellar:testnet",
       transactionId: Math.floor(Date.now() / 1000).toString(), // Should be unique in each transaction
       email: "anh.le3@ekotek.vn",
       refund: {

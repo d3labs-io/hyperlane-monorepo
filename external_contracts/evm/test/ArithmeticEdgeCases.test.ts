@@ -8,7 +8,6 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
   let owner: SignerWithAddress;
   let admin: SignerWithAddress;
   let systemWallet: SignerWithAddress;
-  let vaultWallet: SignerWithAddress;
   let user1: SignerWithAddress;
   let user2: SignerWithAddress;
 
@@ -26,7 +25,7 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
   }
 
   beforeEach(async function () {
-    [owner, admin, systemWallet, vaultWallet, user1, user2] = await ethers.getSigners();
+    [owner, admin, systemWallet, user1, user2] = await ethers.getSigners();
 
     // Deploy tokens
     const MockERC20Factory = await ethers.getContractFactory("MockERC20");
@@ -50,7 +49,6 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
 
     // Setup
     await bridge.connect(owner).grantAdmin(admin.address);
-    await bridge.connect(admin).setVaultWallet(vaultWallet.address);
 
     // Mint tokens
     await token.mint(user1.address, ethers.parseEther("10000"));
@@ -357,10 +355,8 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
     it("Should handle sequential releases reducing locked balance to zero", async function () {
       // Lock a large amount
       const totalLockAmount = ethers.parseEther("10000");
-      // Mint enough tokens to bridge for releases AND fee refunds
-      const totalFeeRefunds = FEE_AMOUNT * 4n;
-      await token.mint(bridge.target, totalLockAmount);
-      await feeToken.mint(bridge.target, totalFeeRefunds);
+
+      let accumulated_fee = await bridge.getAccumulatedFee(feeToken.target);
 
       await bridge.connect(user1).executeBridgeOperation(
         0, // LOCK_WITH_FEE
@@ -397,8 +393,8 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
             transactionId: getUniqueTxId(),
             email: "user1@test.com",
             refund: {
-              feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
+              feeToken: ethers.ZeroAddress,
+              feeAmount: 0
             }
           }
         );
@@ -428,8 +424,8 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
             transactionId: getUniqueTxId(),
             email: "user1@test.com",
             refund: {
-              feeToken: feeToken.target,
-              feeAmount: FEE_AMOUNT
+              feeToken: ethers.ZeroAddress,
+              feeAmount: 0
             }
           }
         )
@@ -469,7 +465,7 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
       // Try to withdraw treasury
       await expect(
         bridge.connect(admin).withdrawTreasury(token.target, user2.address)
-      ).to.be.revertedWithCustomError(bridge, "InvalidAmount");
+      ).to.be.revertedWithCustomError(bridge, "AmountUnderflow");
     });
 
     it("Should prevent withdrawal when balance is less than locked (edge case)", async function () {
@@ -506,7 +502,7 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
       // Try to withdraw - should fail because balance == locked
       await expect(
         bridge.connect(admin).withdrawTreasury(token.target, user2.address)
-      ).to.be.revertedWithCustomError(bridge, "InvalidAmount");
+      ).to.be.revertedWithCustomError(bridge, "AmountUnderflow");
     });
 
     it("Should correctly calculate withdrawable amount with large values", async function () {
@@ -590,7 +586,7 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
       expect(bridgeFeeBalance).to.equal(largeFee);
     });
 
-    it("Should handle fee refunds with large amounts without overflow", async function () {
+    it("Should not handle fee refunds with large amounts which lead to underflow", async function () {
       // Lock tokens first
       const lockAmount = ethers.parseEther("1000");
       await token.mint(bridge.target, lockAmount);
@@ -620,7 +616,7 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
 
       const balanceBefore = await feeToken.balanceOf(user1.address);
 
-      await bridge.connect(systemWallet).executeBridgeOperation(
+      await expect(bridge.connect(systemWallet).executeBridgeOperation(
         2, // RELEASE
         {
           fromToken: "",
@@ -637,11 +633,11 @@ describe("Arithmetic Overflow/Underflow Edge Cases", function () {
             feeAmount: largeFeeRefund
           }
         }
-      );
+      )).to.be.revertedWithCustomError(bridge, "FeeUnderflow");
 
       // Verify fee refund
       const balanceAfter = await feeToken.balanceOf(user1.address);
-      expect(balanceAfter - balanceBefore).to.equal(largeFeeRefund);
+      expect(balanceAfter - balanceBefore).to.not.equal(largeFeeRefund);
     });
 
     it("Should handle zero fee amount correctly", async function () {

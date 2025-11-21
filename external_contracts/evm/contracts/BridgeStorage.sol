@@ -27,6 +27,8 @@ abstract contract BridgeStorage is
     error InsufficientLockedBalance();
     error InvalidSourceChain();
     error InvalidRefund();
+    error FeeUnderflow();
+    error AmountUnderflow();
 
     // ============ Events ============
     
@@ -75,8 +77,12 @@ abstract contract BridgeStorage is
     /// @notice Current chain identifier (CAIP-2 format: namespace:reference)
     string internal currentChainId;
 
-    /// @notice The address of the vault wallet
-    address internal vaultWallet;
+    /// @notice Mapping of token address to accumulated fee
+    mapping(address tokenAddr => uint256 accumulatedFee) internal accumulatedFees;
+
+    // ============ Owner State ============
+    /// @notice Pending owner for two-step ownership transfer
+    address public pendingOwner;
 
     // ============ Internal Helper Functions ============
 

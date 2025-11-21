@@ -50,7 +50,9 @@ abstract contract BridgeUserOperations is BridgeStorage {
         lockedBalances[_token] += amount;
 
         // Collect fee first if fee is set
-        if (feeToken != address(0) && feeAmount > 0 && vaultWallet != address(0)) {
+        if (feeToken != address(0) && feeAmount > 0) {
+            accumulatedFees[feeToken] += feeAmount;
+
             IERC20(feeToken).safeTransferFrom(
                 msg.sender,
                 address(this),
@@ -112,8 +114,23 @@ abstract contract BridgeUserOperations is BridgeStorage {
         // Check and mark transaction ID as used BEFORE external calls
         _useTransactionId(transactionId);
 
+        // Collect fee first if fee is set
+        if (feeToken != address(0) && feeAmount > 0) {
+            accumulatedFees[feeToken] += feeAmount;
+
+            IERC20(feeToken).safeTransferFrom(
+                msg.sender,
+                address(this),
+                feeAmount
+            );
+            emit FeeCollected(msg.sender, feeToken, feeAmount);
+        }
+
         // Burn the tokens using the burnable interface
-        IERC20Burnable(_token).burnFrom(msg.sender, amount);
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), amount);
+
+        // Burn the tokens using the burnable interface
+        IERC20Burnable(_token).burn(amount);
 
         // Emit event
         emit Operation(
@@ -121,7 +138,7 @@ abstract contract BridgeUserOperations is BridgeStorage {
             fromToken,
             toToken,
             amount,
-            0,
+            feeAmount,
             Strings.toHexString(msg.sender),
             destinationAddress,
             currentChainId,
@@ -129,7 +146,7 @@ abstract contract BridgeUserOperations is BridgeStorage {
             transactionId,
             email,
             msg.sender,
-            address(0)
+            feeToken
         );
     }
 }

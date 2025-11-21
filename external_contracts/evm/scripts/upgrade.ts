@@ -84,6 +84,8 @@ async function main() {
     await tx.wait();
 
     sleep(10000);
+
+    await tokenBridge.connect(upgrader).updateAccumulatedFee();
   
     const newImplAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
 

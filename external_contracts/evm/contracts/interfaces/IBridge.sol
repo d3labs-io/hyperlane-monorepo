@@ -94,11 +94,6 @@ interface IBridge {
     /// @param admin The address to revoke admin role
     function revokeAdmin(address admin) external;
 
-    /// @notice Set the vault wallet address
-    /// @param vaultWallet The new vault wallet address
-    function setVaultWallet(address vaultWallet) external;
-
-
     // ============ View Functions ============
 
     /// @notice Get the fee amount

@@ -250,14 +250,6 @@ describe("AccessControl", function () {
       ).to.be.revertedWithCustomError(bridge, "InvalidAddress");
     });
 
-    it("Should revert setVaultWallet() when wallet is address(0)", async function () {
-      await bridge.connect(owner).grantAdmin(admin1.address);
-
-      await expect(
-        bridge.connect(admin1).setVaultWallet(ethers.ZeroAddress)
-      ).to.be.revertedWithCustomError(bridge, "InvalidAddress");
-    });
-
     it("Should revert updateOwner() when newOwner is address(0)", async function () {
       await expect(
         bridge.connect(owner).updateOwner(ethers.ZeroAddress)

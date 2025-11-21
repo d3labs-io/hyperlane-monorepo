@@ -26,9 +26,16 @@ mod overflow_underflow_tests {
     include!("05_overflow_underflow_tests.rs");
 }
 
+mod ttl_resurrection_tests {
+    include!("06_ttl_resurrection_tests.rs");
+}
+
 use crate::*;
 use soroban_sdk::{
-    log, testutils::Address as _, token::{StellarAssetClient, TokenClient}, Address, Env, String
+    log,
+    testutils::Address as _,
+    token::{StellarAssetClient, TokenClient},
+    Address, Env, String,
 };
 
 // ============ Test Fixtures ============
@@ -69,18 +76,20 @@ impl TestEnvironment {
 
         let bridge_id = env.register(
             TokenBridge,
-            (owner.clone(), system_wallet.clone(), current_chain_id)
+            (owner.clone(), system_wallet.clone(), current_chain_id),
         );
         let bridge_client = TokenBridgeClient::new(&env, &bridge_id);
 
         let lock_unlock_asset_admin = Address::generate(&env);
-        let lock_unlock_contract = env.register_stellar_asset_contract_v2(lock_unlock_asset_admin.clone());
+        let lock_unlock_contract =
+            env.register_stellar_asset_contract_v2(lock_unlock_asset_admin.clone());
         let lock_unlock_token_id = lock_unlock_contract.address();
         let lock_unlock_token_client = TokenClient::new(&env, &lock_unlock_token_id);
         let lock_unlock_stellar_client = StellarAssetClient::new(&env, &lock_unlock_token_id);
 
         let mint_burn_asset_admin = Address::generate(&env);
-        let mint_burn_contract = env.register_stellar_asset_contract_v2(mint_burn_asset_admin.clone());
+        let mint_burn_contract =
+            env.register_stellar_asset_contract_v2(mint_burn_asset_admin.clone());
         let mint_burn_token_id = mint_burn_contract.address();
         let mint_burn_token_client = TokenClient::new(&env, &mint_burn_token_id);
         let mint_burn_stellar_client = StellarAssetClient::new(&env, &mint_burn_token_id);
@@ -112,14 +121,14 @@ impl TestEnvironment {
 pub fn setup_bridge_and_token(
     env: &Env,
 ) -> (
-    Address,                  // bridge_id
-    TokenBridgeClient<'static>,        // bridge_client
-    Address,                  // token_id
-    TokenClient<'static>,              // token_client
-    StellarAssetClient<'static>,       // stellar_asset_client
-    Address,                  // owner
-    Address,                  // system_wallet
-    Address,                  // asset_admin
+    Address,                     // bridge_id
+    TokenBridgeClient<'static>,  // bridge_client
+    Address,                     // token_id
+    TokenClient<'static>,        // token_client
+    StellarAssetClient<'static>, // stellar_asset_client
+    Address,                     // owner
+    Address,                     // system_wallet
+    Address,                     // asset_admin
 ) {
     let owner = Address::generate(&env);
     let system_wallet = Address::generate(&env);
@@ -130,7 +139,7 @@ pub fn setup_bridge_and_token(
 
     let bridge_id = env.register(
         TokenBridge,
-        (owner.clone(), system_wallet.clone(), current_chain_id)
+        (owner.clone(), system_wallet.clone(), current_chain_id),
     );
     let bridge_client = TokenBridgeClient::new(&env, &bridge_id);
 
@@ -151,7 +160,7 @@ pub fn setup_bridge_and_token(
         stellar_asset_client,
         owner,
         system_wallet,
-        asset_admin
+        asset_admin,
     )
 }
 
@@ -191,6 +200,10 @@ pub fn execute_bridge_op(
     bridge_client.execute_bridge_operation(&operation, &bridge_data, caller);
 }
 
+pub fn extend_ttl(bridge_client: &TokenBridgeClient, threshold: u32, extend_to: u32, key: DataKey) {
+    bridge_client.extend_ttl(&threshold, &extend_to, &key);
+}
+
 // ============ Constants ============
 
 pub const INITIAL_USER_BALANCE: i128 = 10_000;
@@ -201,4 +214,3 @@ pub const OPERATION_LOCK: u32 = 0;
 pub const OPERATION_BURN: u32 = 1;
 pub const OPERATION_RELEASE: u32 = 2;
 pub const OPERATION_MINT: u32 = 3;
-

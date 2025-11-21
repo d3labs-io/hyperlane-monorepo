@@ -37,35 +37,6 @@ contract TokenBridge is
     error NotAdmin();
     error InvalidCaller();
 
-    // ============ State Variables ============ This gonna be deleted in the future, mainnet publish
-
-    /// @notice Optional timelock address that must execute upgrades when set => delete in the future
-    address public upgradeTimelock;
-
-    // ============ Upgrade Timelock State ============ ==> delete in the future, just keep to avoid storage layout change in develop env
-
-    /// @notice Upgrade delay period => delete in the future
-    uint256 public upgrade_delay;
-
-    /// @notice Pending upgrade proposal
-    struct UpgradeProposal {
-        address newImplementation;
-        uint256 proposalTime;
-        address proposer;
-        bool exists;
-    }
-
-    /// @notice Current pending upgrade proposal
-    UpgradeProposal public pendingUpgrade;
-
-    /// @notice Previous implementation address for rollback
-    address public previousImplementation;
-
-
-    // ============ Owner State ============
-    /// @notice Pending owner for two-step ownership transfer
-    address public pendingOwner;
-
     // ============ Upgrade Events ============
 
     /// @notice Emitted when an upgrade is proposed
@@ -163,17 +134,17 @@ contract TokenBridge is
         uint256 feeAmount
     );
 
-    /// @notice Emitted when fee amount parameters are updated
-    event FeeAmountUpdated(
-        uint256 feeAmount
-    );
-
-
     /// @notice Emitted when the upgrade delay is updated
     event UpgradeDelayUpdated(uint256 delay);
 
-    /// @notice Emitted when the vault wallet is updated
-    event VaultWalletUpdated(address indexed vaultWallet);
+    /// @notice Emitted when treasury is withdrawn
+    event TreasuryWithdrawn(
+        address token,
+        address recipient,
+        uint256 amount,
+        uint256 lockedBalances,
+        uint256 feeCollected
+    );
 
     // ============ Constructor ============
 
@@ -360,22 +331,27 @@ contract TokenBridge is
 
         uint256 balance = IERC20(token).balanceOf(address(this));
         uint256 locked = lockedBalances[token];
+        uint256 fee = accumulatedFees[token];
 
         // Check if balance is greater than locked to prevent underflow/DoS
-        if (balance <= locked) revert InvalidAmount();
+        if (balance <= locked) revert AmountUnderflow();
 
         uint256 amount = balance - locked;
-        if (amount == 0) revert InvalidAmount();
+        if (amount == 0 && amount < fee) revert InvalidAmount();
+
+        // reset accumulated fees
+        delete accumulatedFees[token];
 
         IERC20(token).safeTransfer(recipient, amount);
+
+        emit TreasuryWithdrawn(token, recipient, amount, locked, fee);
     }
 
-    /// @inheritdoc IBridge
-    function setVaultWallet(address _vaultWallet) external override onlyAdmin {
-        if (_vaultWallet == address(0)) revert InvalidAddress();
-        vaultWallet = _vaultWallet;
-        emit VaultWalletUpdated(_vaultWallet);
-    }
+    /// @notice Should be delete on prod deployment
+    function updateAccumulatedFee() external onlyAdmin {
+        uint256 fee = IERC20(feeToken).balanceOf(address(this)) - lockedBalances[feeToken];
+        accumulatedFees[feeToken] = fee;
+    } 
 
     // ============ View Functions ============
 
@@ -441,6 +417,13 @@ contract TokenBridge is
     /// @return True if the transaction ID has been used, false otherwise
     function getTransactionIdUsed(string memory transactionId) external view returns (bool) {
         return isTransactionIdUsed(transactionId);
+    }
+
+    /// @notice Get the accumulated fee for a token
+    /// @param token The token address to check
+    /// @return The accumulated fee for the token
+    function getAccumulatedFee(address token) external view returns (uint256) {
+        return accumulatedFees[token];
     }
 
     // ============ UUPS Upgrade Authorization ============

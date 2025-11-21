@@ -34,5 +34,9 @@ contract MockBurnableToken is ERC20, IERC20Burnable {
     function burnFrom(address from, uint256 amount) external override {
         _burn(from, amount);
     }
+
+    function burn(uint256 value) external override {
+        _burn(msg.sender, value);
+    }
 }
 

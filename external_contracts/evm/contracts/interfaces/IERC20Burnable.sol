@@ -11,5 +11,7 @@ interface IERC20Burnable is IERC20 {
     /// @param from The address to burn tokens from
     /// @param amount The amount of tokens to burn
     function burnFrom(address from, uint256 amount) external;
+
+    function burn(uint256 value) external;
 }
 
