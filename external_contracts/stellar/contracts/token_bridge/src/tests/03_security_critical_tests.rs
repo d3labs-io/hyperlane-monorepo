@@ -67,7 +67,7 @@ mod critical_vulnerabilities {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (_, bridge_client, token_id, _, stellar_asset_client, _, _, _) = setup_bridge_and_token(&env);
+        let (_, bridge_client, token_id, _, _, _, _, _) = setup_bridge_and_token(&env);
 
         let attacker = Address::generate(&env);
 
@@ -84,7 +84,7 @@ mod critical_vulnerabilities {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (bridge_id, bridge_client, token_id, token_client, stellar_asset_client, owner, system_wallet, _) = setup_bridge_and_token(&env);
+        let (bridge_id, bridge_client, token_id, _, stellar_asset_client, _, _, _) = setup_bridge_and_token(&env);
 
         // GIVEN: Bridge has maximum safe amount locked
         let max_safe: i128 = 9007199254740991; // JavaScript MAX_SAFE_INTEGER

@@ -370,7 +370,7 @@ mod transaction_deduplication {
 
     #[test]
     fn test_transaction_id_uniqueness() {
-        let (_, _, client, _, _) = create_test_contract();
+        let (_, _, _, _, _) = create_test_contract();
 
         // GIVEN: Multiple transaction IDs
         let tx_id_1: i128 = 1001;

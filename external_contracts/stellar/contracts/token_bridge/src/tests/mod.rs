@@ -165,7 +165,7 @@ pub fn setup_bridge_and_token(
 }
 
 /// Helper function to generate a valid Stellar address string for testing
-pub fn gen_address_str(env: &Env) -> String {
+pub fn _gen_address_str(env: &Env) -> String {
     Address::generate(env).to_string()
 }
 
@@ -205,11 +205,6 @@ pub fn extend_ttl(bridge_client: &TokenBridgeClient, threshold: u32, extend_to: 
 }
 
 // ============ Constants ============
-
-pub const INITIAL_USER_BALANCE: i128 = 10_000;
-pub const BRIDGE_TRANSFER_AMOUNT: i128 = 5_000;
-pub const EXPECTED_REMAINING_BALANCE: i128 = 5_000;
-pub const CHAIN_ID: &str = "stellar:testnet";
 pub const OPERATION_LOCK: u32 = 0;
 pub const OPERATION_BURN: u32 = 1;
 pub const OPERATION_RELEASE: u32 = 2;

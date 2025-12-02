@@ -16,7 +16,7 @@
 // in BOTH debug and release modes using checked arithmetic.
 
 use crate::tests::*;
-use soroban_sdk::{String, testutils::Address as _, Address, Env};
+use soroban_sdk::{String, Address, Env};
 
 // ============ Lock Operation Overflow Tests ============
 

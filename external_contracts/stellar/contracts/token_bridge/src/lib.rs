@@ -107,8 +107,11 @@ pub enum DataKey {
     ProposedOwner,  // Proposed new owner (for 2-step ownership transfer)
 
     // Persistent storage (security-critical and financial state)
-    TransactionIds(i128),    // Used transaction IDs (replay protection)
+    // TransactionIds(i128),    // Used transaction IDs (replay protection)
     LockedBalances(Address), // Current locked token balances (MIGRATED to persistent)
+
+    // Temporary storage (not critical)
+    TransactionIds(i128), // Move from persistent to temporary to decrease transaction fee
 }
 
 #[contract]
@@ -243,7 +246,7 @@ impl TokenBridge {
     /// storage, an attacker could replay old transactions after an upgrade.
     pub fn is_transaction_used(e: &Env, transaction_id: i128) -> bool {
         e.storage()
-            .persistent()
+            .temporary()
             .get(&DataKey::TransactionIds(transaction_id))
             .unwrap_or(false)
     }
@@ -263,12 +266,7 @@ impl TokenBridge {
         let key = DataKey::TransactionIds(transaction_id);
 
         // Store transaction ID as used in PERSISTENT storage
-        e.storage().persistent().set(&key, &true);
-
-        // Extend TTL to 30 days (518,400 ledgers)
-        e.storage()
-            .persistent()
-            .extend_ttl(&key, TTL_THRESHOLD, LEDGERS_PER_30_DAYS);
+        e.storage().temporary().set(&key, &true);
 
         Ok(())
     }
@@ -407,9 +405,6 @@ impl TokenBridge {
         e.storage()
             .persistent()
             .set(&balance_key, &(current_balance + amount));
-
-        // Extend TTL for locked balance entry (30 days)
-        Self::extend_ttl(e, TTL_THRESHOLD, LEDGERS_PER_30_DAYS, balance_key);
 
         // Transfer tokens from user to contract
         let client = token::TokenClient::new(e, &from_token_address);
@@ -893,7 +888,10 @@ impl TokenBridge {
 
     // Extend TTL of the contract instance
     pub fn extend_ttl_instance(e: &Env, threshold: u32, extend_to: u32) {
-        e.storage().instance().extend_ttl(threshold, extend_to);
+        // e.storage().instance().extend_ttl(threshold, extend_to);
+
+        // Move to use this since the upper function does not support extend wasm
+        e.deployer().extend_ttl(e.current_contract_address(), threshold, extend_to);
     }
 }
 

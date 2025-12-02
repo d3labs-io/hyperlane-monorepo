@@ -19,7 +19,9 @@
 
 use super::*;
 use soroban_sdk::testutils::storage::Persistent;
+use soroban_sdk::testutils::storage::Temporary;
 use soroban_sdk::testutils::Ledger;
+
 
 // ============ Test Environment Setup ============
 
@@ -90,13 +92,14 @@ mod lock_operation_ttl {
             assert_eq!(balance, 5_000, "Locked balance should be 5,000");
 
             let ttl = env.storage().persistent().get_ttl(&balance_key);
-            // TTL should be LEDGERS_PER_30_DAYS = 518,400
-            assert_eq!(ttl, 518_400, "LockedBalances TTL should be minimum (got {})", ttl);
+            // TTL should be minimum TTL for persistent (500) minus 1
+            assert_eq!(ttl, 499, "LockedBalances TTL should be minimum TTL (got {})", ttl);
+
         });
     }
 
     #[test]
-    fn test_lock_extends_transaction_id_ttl() {
+    fn test_lock_recreates_transaction_id_ttl() {
         let env = create_env_with_ttl();
         env.mock_all_auths();
 
@@ -127,11 +130,39 @@ mod lock_operation_ttl {
         // THEN: TransactionIds entry should have extended TTL (1 year = 31,536,000 ledgers)
         env.as_contract(&test_env.bridge_id, || {
             let tx_key = DataKey::TransactionIds(transaction_id);
-            let ttl = env.storage().persistent().get_ttl(&tx_key);
+            let ttl = env.storage().temporary().get_ttl(&tx_key);
 
-            // TTL should be LEDGERS_PER_30_DAYS = 518,400
-            assert_eq!(ttl, 518_400, "TransactionIds TTL should be extended to ~1 year (got {})", ttl);
+            // TTL should be minimum TTL for temporary (100) minus 1
+            assert_eq!(ttl, 99, "TransactionIds TTL should be extended to 99 (got {})", ttl);
         });
+
+        // Move the ledger to more 100 ledgers
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 100;
+        });
+
+        let is_used = &test_env.bridge_client.is_transaction_used(&transaction_id);
+        assert_eq!(is_used, &false, "Transaction ID should still be marked as used");
+
+        // Re-submit the transaction with the same transaction ID after the TTL has expired => should succeed
+        execute_bridge_op(
+            &test_env.bridge_client,
+            OPERATION_LOCK,
+            &from_token,
+            &to_token,
+            5_000,
+            &user.to_string(),
+            &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
+            &String::from_str(&env, "stellar:testnet"),
+            &String::from_str(&env, "pruv:testnet"),
+            transaction_id,
+            &String::from_str(&env, "test@example.com"),
+            &user,
+        );
+
+        let is_used = &test_env.bridge_client.is_transaction_used(&transaction_id);
+        assert_eq!(is_used, &true, "Transaction ID should still be marked as used");
+        
     }
 
     #[test]
@@ -211,6 +242,15 @@ mod release_operation_ttl {
             &user,
         );
 
+        // Verify initial TTL
+        env.as_contract(&test_env.bridge_id, || {
+            let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
+            let ttl = env.storage().persistent().get_ttl(&balance_key);
+
+            // TTL should be minimum TTL for persistent (500) minus 1
+            assert_eq!(ttl, 499, "LockedBalances TTL should be created and extend to minimum TTL - 1 (got {})", ttl);
+        });
+
         // WHEN: System wallet releases tokens
         let recipient = Address::generate(&env);
 
@@ -229,75 +269,12 @@ mod release_operation_ttl {
             &test_env.system_wallet,
         );
 
-        // THEN: LockedBalances entry should have extended TTL again
+        // THEN: LockedBalances entry should have extended TTL when 499 is below threshold
         env.as_contract(&test_env.bridge_id, || {
             let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
             let ttl = env.storage().persistent().get_ttl(&balance_key);
 
-            assert!(ttl > 86_400, "LockedBalances TTL should be extended on Release (got {})", ttl);
-        });
-    }
-
-    #[test]
-    fn test_release_extends_ttl_when_below_threshold() {
-        let env = create_env_with_ttl();
-        env.mock_all_auths();
-
-        let test_env = TestEnvironment::new(&env);
-        let user = Address::generate(&env);
-
-        // GIVEN: Tokens are locked (TTL will be LEDGERS_PER_30_DAYS - below threshold of 86,400)
-        test_env.lock_unlock_token.stellar_asset_client.mint(&user, &10_000);
-
-        let from_token = test_env.lock_unlock_token.token_id.to_string();
-
-        execute_bridge_op(
-            &test_env.bridge_client,
-            OPERATION_LOCK,
-            &from_token,
-            &String::from_str(&env, "0x406AF9645ED085c8A96BD0F07f7621675358BF5e"),
-            5_000,
-            &user.to_string(),
-            &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
-            &String::from_str(&env, "stellar:testnet"),
-            &String::from_str(&env, "pruv:testnet"),
-            176294386600012,
-            &String::from_str(&env, "test@example.com"),
-            &user,
-        );
-
-        // Verify initial TTL is below threshold
-        let initial_ttl = env.as_contract(&test_env.bridge_id, || {
-            let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
-            env.storage().persistent().get_ttl(&balance_key)
-        });
-        assert_eq!(initial_ttl, 518400, "Initial TTL should be 518400");
-
-        // WHEN: System wallet releases tokens (TTL is below threshold, so it will be extended)
-        let recipient = Address::generate(&env);
-
-        execute_bridge_op(
-            &test_env.bridge_client,
-            OPERATION_RELEASE,
-            &String::from_str(&env, "0x406AF9645ED085c8A96BD0F07f7621675358BF5e"),
-            &from_token,
-            2_000,
-            &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
-            &recipient.to_string(),
-            &String::from_str(&env, "pruv:testnet"),
-            &String::from_str(&env, "stellar:testnet"),
-            176294386600013,
-            &String::from_str(&env, "test@example.com"),
-            &test_env.system_wallet,
-        );
-
-        // THEN: TTL should be extended to LEDGERS_PER_30_DAYS (518,400)
-        env.as_contract(&test_env.bridge_id, || {
-            let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
-            let new_ttl = env.storage().persistent().get_ttl(&balance_key);
-
-            // TTL should be extended to 30 days (518,400 ledgers)
-            assert!(new_ttl > 500_000, "TTL should be extended to ~30 days (got {})", new_ttl);
+            assert_eq!(ttl, 518_400, "LockedBalances TTL should be extended on Release (got {})", ttl);
         });
     }
 }
@@ -420,8 +397,8 @@ mod ttl_persistence {
             env.storage().persistent().get_ttl(&balance_key)
         });
 
-        // Lock operation doesn't extend TTL, so it will be 518400
-        assert_eq!(initial_ttl, 518400, "Initial TTL should be LEDGERS_PER_30_DAYS (got {})", initial_ttl);
+        // Lock operation doesn't extend TTL, so it will be 499
+        assert_eq!(initial_ttl, 499, "Initial TTL should be minimum TTL - 1 (got {})", initial_ttl);
 
         // WHEN: System wallet releases tokens (this will extend TTL since 499 < 86,400)
         let recipient = Address::generate(&env);
@@ -450,7 +427,7 @@ mod ttl_persistence {
 
             let new_ttl = env.storage().persistent().get_ttl(&balance_key);
             // TTL should be extended to 30 days (518,400 ledgers)
-            assert!(new_ttl > 500_000, "TTL should be extended to ~30 days (got {})", new_ttl);
+            assert_eq!(new_ttl, 518_400, "TTL should be extended to ~30 days (got {})", new_ttl);
         });
 
         // Verify the release was successful
@@ -462,7 +439,8 @@ mod ttl_persistence {
     }
 
     #[test]
-    fn test_transaction_id_persists() {
+    #[should_panic]
+    fn test_transaction_id_expires() {
         let env = create_env_with_ttl();
         env.mock_all_auths();
 
@@ -499,11 +477,25 @@ mod ttl_persistence {
         // AND: Transaction ID has extended TTL
         env.as_contract(&test_env.bridge_id, || {
             let tx_key = DataKey::TransactionIds(transaction_id);
-            let ttl = env.storage().persistent().get_ttl(&tx_key);
+            let ttl = env.storage().temporary().get_ttl(&tx_key);
 
-            // TTL should be LEDGERS_PER_30_DAYS = 518,400
-            assert_eq!(ttl, 518_400, "Transaction ID TTL should be LEDGERS_PER_30_DAYS (got {})", ttl);
+            // TTL should be minimum TTL for temporary (100) minus 1
+            assert_eq!(ttl, 99, "Transaction ID TTL should be minimum TTL - 1 (got {})", ttl);
         });
+
+        // Increase ledger by 100 to simulate time passing
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 100;
+        });
+
+        // Should panic here because entry should have expired
+        env.as_contract(&test_env.bridge_id, || {
+            let tx_key = DataKey::TransactionIds(transaction_id);
+            // Should panic here because entry should have expired
+            let _ttl = env.storage().temporary().get_ttl(&tx_key);
+
+        });
+        
     }
 
     #[test]
@@ -609,6 +601,168 @@ mod ttl_persistence {
         // Verify final balance
         let final_balance = test_env.bridge_client.get_locked_balance(&test_env.lock_unlock_token.token_id);
         assert_eq!(final_balance, 50_000, "Final locked balance should be 100,000 - 50,000");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_balance_should_be_expires() {
+        let env = create_env_with_ttl();
+        env.mock_all_auths();
+
+        let test_env = TestEnvironment::new(&env);
+        let user = Address::generate(&env);
+
+        // GIVEN: Large amount of tokens locked
+        test_env.lock_unlock_token.stellar_asset_client.mint(&user, &100_000);
+
+        let from_token = test_env.lock_unlock_token.token_id.to_string();
+
+        execute_bridge_op(
+            &test_env.bridge_client,
+            OPERATION_LOCK,
+            &from_token,
+            &String::from_str(&env, "0x406AF9645ED085c8A96BD0F07f7621675358BF5e"),
+            100_000,
+            &user.to_string(),
+            &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
+            &String::from_str(&env, "stellar:testnet"),
+            &String::from_str(&env, "pruv:testnet"),
+            176294386600012,
+            &String::from_str(&env, "test@example.com"),
+            &user,
+        );
+
+        // WHEN: Multiple releases happen
+        for i in 0..5 {
+            let recipient = Address::generate(&env);
+
+            execute_bridge_op(
+                &test_env.bridge_client,
+                OPERATION_RELEASE,
+                &String::from_str(&env, "0x406AF9645ED085c8A96BD0F07f7621675358BF5e"),
+                &from_token,
+                10_000,
+                &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
+                &recipient.to_string(),
+                &String::from_str(&env, "pruv:testnet"),
+                &String::from_str(&env, "stellar:testnet"),
+                176294386600013 + i,
+                &String::from_str(&env, "test@example.com"),
+                &test_env.system_wallet,
+            );
+
+            // THEN: TTL should be extended after each release
+            env.as_contract(&test_env.bridge_id, || {
+                let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
+                let ttl = env.storage().persistent().get_ttl(&balance_key);
+
+                assert!(
+                    ttl > 86_400,
+                    "TTL should be extended after release {} (got {})", i, ttl
+                );
+            });
+        }
+
+        // Verify final balance
+        let final_balance = test_env.bridge_client.get_locked_balance(&test_env.lock_unlock_token.token_id);
+        assert_eq!(final_balance, 50_000, "Final locked balance should be 100,000 - 50,000");
+
+        // Increase ledger by 518,401 to simulate time passing
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 518_401;
+        });
+
+        // THEN: LockedBalances entry should not be accessible
+        env.as_contract(&test_env.bridge_id, || {
+            let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
+            let balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+            assert_eq!(balance, 0, "Locked balance should be 0 after expiration");
+        });
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_balance_should_be_extendable_after_expiration() {
+        let env = create_env_with_ttl();
+        env.mock_all_auths();
+
+        let test_env = TestEnvironment::new(&env);
+        let user = Address::generate(&env);
+
+        // GIVEN: Large amount of tokens locked
+        test_env.lock_unlock_token.stellar_asset_client.mint(&user, &100_000);
+
+        let from_token = test_env.lock_unlock_token.token_id.to_string();
+
+        execute_bridge_op(
+            &test_env.bridge_client,
+            OPERATION_LOCK,
+            &from_token,
+            &String::from_str(&env, "0x406AF9645ED085c8A96BD0F07f7621675358BF5e"),
+            100_000,
+            &user.to_string(),
+            &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
+            &String::from_str(&env, "stellar:testnet"),
+            &String::from_str(&env, "pruv:testnet"),
+            176294386600012,
+            &String::from_str(&env, "test@example.com"),
+            &user,
+        );
+
+        // WHEN: Multiple releases happen
+        for i in 0..5 {
+            let recipient = Address::generate(&env);
+
+            execute_bridge_op(
+                &test_env.bridge_client,
+                OPERATION_RELEASE,
+                &String::from_str(&env, "0x406AF9645ED085c8A96BD0F07f7621675358BF5e"),
+                &from_token,
+                10_000,
+                &String::from_str(&env, "0x1E66a7010ca66Ae923267336BD9D6c321f1E1Ac4"),
+                &recipient.to_string(),
+                &String::from_str(&env, "pruv:testnet"),
+                &String::from_str(&env, "stellar:testnet"),
+                176294386600013 + i,
+                &String::from_str(&env, "test@example.com"),
+                &test_env.system_wallet,
+            );
+
+            // THEN: TTL should be extended after each release
+            env.as_contract(&test_env.bridge_id, || {
+                let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
+                let ttl = env.storage().persistent().get_ttl(&balance_key);
+
+                assert!(
+                    ttl > 86_400,
+                    "TTL should be extended after release {} (got {})", i, ttl
+                );
+            });
+        }
+
+        // Verify final balance
+        let final_balance = test_env.bridge_client.get_locked_balance(&test_env.lock_unlock_token.token_id);
+        assert_eq!(final_balance, 50_000, "Final locked balance should be 100,000 - 50,000");
+
+        // Increase ledger by 518,401 to simulate time passing
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 518_401;
+        });
+
+        // THEN: Extend LockedBalance TTL
+        extend_ttl(&test_env.bridge_client, TTL_THRESHOLD, LEDGERS_PER_30_DAYS, DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone()));
+
+        env.as_contract(&test_env.bridge_id, || {
+            let balance_key = DataKey::LockedBalances(test_env.lock_unlock_token.token_id.clone());
+            let ttl = env.storage().persistent().get_ttl(&balance_key);
+
+            assert_eq!(
+                ttl,
+                LEDGERS_PER_30_DAYS,
+                "TTL should be extended after expiration (got {})", ttl
+            );
+        });
+        
     }
 }
 
