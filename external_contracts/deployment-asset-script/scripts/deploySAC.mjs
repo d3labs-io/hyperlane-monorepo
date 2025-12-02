@@ -43,8 +43,8 @@ const deployStellarAssetContract = async () => {
   const args = process.argv.slice(2);
   let assetCode = (process.env.ASSET_CODE || args[0] || "MYASSET").trim();
 
-  // Validate and normalize asset code
-  // Stellar asset codes must be: uppercase alphanumeric, max 12 characters
+  // Validate asset code
+  // Stellar asset codes are case-sensitive: alphanumeric (a-z, A-Z, 0-9), max 12 characters
   if (!assetCode || assetCode.length === 0) {
     throw new Error("Asset code cannot be empty");
   }
@@ -55,21 +55,18 @@ const deployStellarAssetContract = async () => {
     );
   }
 
-  // Check if it contains only alphanumeric characters
+  // Check if it contains only alphanumeric characters (case-sensitive)
   if (!/^[A-Za-z0-9]+$/.test(assetCode)) {
     throw new Error(
-      `Asset code "${assetCode}" contains invalid characters. Only alphanumeric characters (A-Z, 0-9) are allowed.`
+      `Asset code "${assetCode}" contains invalid characters. Only alphanumeric characters (a-z, A-Z, 0-9) are allowed.`
     );
   }
 
-  // Convert to uppercase (Stellar requires uppercase)
-  const originalAssetCode = assetCode;
-  assetCode = assetCode.toUpperCase();
-  if (originalAssetCode !== assetCode) {
-    console.log(
-      `Note: Asset code converted to uppercase: "${originalAssetCode}" -> "${assetCode}"`
-    );
-  }
+  // Note: Asset codes are case-sensitive on Stellar
+  // "USD", "usd", and "Usd" are treated as different assets
+  console.log(
+    `Asset code: "${assetCode}" (case-sensitive - will be used as provided)`
+  );
 
   const sourceSecrets = process.env.STELLAR_SECRET_KEY;
   if (!sourceSecrets) {

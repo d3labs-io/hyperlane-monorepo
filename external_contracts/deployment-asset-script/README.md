@@ -91,32 +91,11 @@ Deploy with default asset code (MYASSET):
 make deploy-stellar
 ```
 
-**Note:** Stellar asset codes must be:
-- Uppercase alphanumeric characters only (A-Z, 0-9)
+**Note:** Stellar asset codes are case-sensitive and must be:
+- Alphanumeric characters (a-z, A-Z, 0-9)
 - Maximum 12 characters
-- The script will automatically convert lowercase to uppercase if needed
-
-### Run Tests
-
-```bash
-make test
-# or
-npx hardhat test
-```
-
-### Compile Contracts
-
-```bash
-make compile
-# or
-npx hardhat compile
-```
-
-### Clean Build Artifacts
-
-```bash
-make clean
-```
+- Case matters: "USD", "usd", and "Usd" are treated as different assets
+- By convention, ISO 4217 currency codes (USD, EUR, etc.) use uppercase
 
 ## Manual Deployment (without Makefile)
 
