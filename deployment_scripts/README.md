@@ -105,10 +105,37 @@ Save these details for the subsequent steps.
 
 ## 3. Add New Pruv Router to Whitelist
 
-Using the **BRIDGE ADMIN** wallet, call `addToWhitelist(New Pruv Router Address)` on this contract:
+Using the **BRIDGE ADMIN** wallet, call `addToWhitelist(New Pruv Router Address)` on the appropriate contract.
 
-- **Testnet:** https://explorer.testnet.pruv.network/address/0xa679Eb6A2EA00DAE0FA0dDfB240FEd14984e8390?tab=read_write_contract#0xe43252d7
-- **Mainnet:** https://explorer.pruv.network/address/0x4358C6355B14cD5e59898FA76C61Dc56A9680633?tab=read_write_contract#0xe43252d7
+You can use `cast` (part of Foundry) to execute this transaction easily:
+
+**Testnet**
+
+```shell
+cast send 0xa679Eb6A2EA00DAE0FA0dDfB240FEd14984e8390 \
+  "addToWhitelist(address)" <NEW_PRUV_ROUTER_ADDRESS> \
+  --rpc-url https://rpc.testnet.pruv.network \
+  --private-key <BRIDGE_ADMIN_PRIVATE_KEY> \
+  --legacy
+```
+
+or through the Pruv Explorer:
+
+- Explorer: https://explorer.testnet.pruv.network/address/0xa679Eb6A2EA00DAE0FA0dDfB240FEd14984e8390?tab=read_write_contract#0xe43252d7, then input the <NEW_PRUV_ROUTER_ADDRESS> and sign
+
+**Mainnet**
+
+```shell
+cast send 0x4358C6355B14cD5e59898FA76C61Dc56A9680633 \
+  "addToWhitelist(address)" <NEW_PRUV_ROUTER_ADDRESS> \
+  --rpc-url https://rpc.pruv.network/ \
+  --private-key <BRIDGE_ADMIN_PRIVATE_KEY> \
+  --legacy
+```
+
+or through the Pruv Explorer:
+
+- Explorer: https://explorer.pruv.network/address/0x4358C6355B14cD5e59898FA76C61Dc56A9680633?tab=read_write_contract#0xe43252d7, then input the <NEW_PRUV_ROUTER_ADDRESS> and sign
 
 ## 4. Add New Token to Front End
 
