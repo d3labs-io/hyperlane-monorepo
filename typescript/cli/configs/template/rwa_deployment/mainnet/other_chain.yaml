@@ -1,0 +1,11 @@
+chainname:
+  interchainSecurityModule:
+    domains: {}
+    owner: "0xD91389A4f36e9476bF696b0aA5C8BbEF550598b0"
+    type: defaultFallbackRoutingIsm
+  isNft: false
+  owner: "0xD91389A4f36e9476bF696b0aA5C8BbEF550598b0"
+  proxyAdmin:
+    address: "PROXY_ADDRESS"
+    owner: "0xD91389A4f36e9476bF696b0aA5C8BbEF550598b0"
+  type: synthetic

@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../schema.json
+blockExplorers:
+  - apiKey: ""
+    apiUrl: https://explorer.pruv.network/api
+    family: blockscout
+    name: PruvExplorer
+    url: https://explorer.pruv.network/
+blocks:
+  confirmations: 2
+  estimateBlockTime: 2
+  reorgPeriod: 2
+chainId: 7337
+displayName: Pruv
+domainId: 7337
+isTestnet: false
+name: pruv
+nativeToken:
+  decimals: 18
+  name: Pruv
+  symbol: PRUV
+protocol: ethereum
+rpcUrls:
+  - http: https://rpc.pruv.network/
+technicalStack: other

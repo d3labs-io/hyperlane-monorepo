@@ -1,0 +1,13 @@
+pruvtest:
+  interchainSecurityModule:
+    domains: {}
+    owner: "0x88b90d085dAf288C295bD3A6057B086BEA1C95e9"
+    type: defaultFallbackRoutingIsm
+  isNft: false
+  owner: "0x88b90d085dAf288C295bD3A6057B086BEA1C95e9"
+  proxyAdmin:
+    address: "0x823B2406490752fB50e1CABa809Bf643CD233553"
+    owner: "0x88b90d085dAf288C295bD3A6057B086BEA1C95e9"
+  token: "RWA_TOKEN_ADDRESS"
+  type: collateralWithFee
+  feeCollector: "0x55fE87D0E26492ee7E7D1bBdaf96B3ce9c22b303"
