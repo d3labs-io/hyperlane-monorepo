@@ -28,7 +28,7 @@ brew install yq
 ### c. Build Project
 
 ```shell
-yarn build
+yarn install && yarn build
 ```
 
 ## 2. Run Deploy Script
@@ -112,13 +112,19 @@ Using the **BRIDGE ADMIN** wallet, call `addToWhitelist(New Pruv Router Address)
 
 ## 4. Add New Token to Front End
 
-1. **Create a new branch** in the frontend repository.
-2. **Append tokens** from the **Finalized Deployment Config** (e.g., `/typescript/cli/.hyperlane/latest_deployments/warp-route-deployment-config.yaml`) to `warpRoutes.yaml` in the UI template:
-   - **Testnet:** https://github.com/d3labs-io/hyperlane-warp-ui-template/blob/staging/src/consts/warpRoutes.yaml
-   - **Mainnet:** https://github.com/d3labs-io/hyperlane-warp-ui-template/blob/main/src/consts/warpRoutes.yaml
-3. **Test locally**:
+1. **Clone the frontend repository** and install dependencies:
+   ```shell
+   git clone https://github.com/d3labs-io/hyperlane-warp-ui-template.git
+   cd hyperlane-warp-ui-template
+   yarn install
+   ```
+2. **Create a new branch** in the frontend repository.
+3. **Append tokens** from the **Finalized Deployment Config** (e.g., `/typescript/cli/.hyperlane/latest_deployments/warp-route-deployment-config.yaml`) to `warpRoutes.yaml` in the UI template:
+   - **Testnet:** [src/consts/warpRoutes.yaml](https://github.com/d3labs-io/hyperlane-warp-ui-template/blob/staging/src/consts/warpRoutes.yaml)
+   - **Mainnet:** [src/consts/warpRoutes.yaml](https://github.com/d3labs-io/hyperlane-warp-ui-template/blob/main/src/consts/warpRoutes.yaml)
+4. **Test locally**:
    ```shell
    npm run dev
    ```
    Open the UI in your browser and verify that the token exists.
-4. **Create a Pull Request** and merge.
+5. **Create a Pull Request** and merge.
