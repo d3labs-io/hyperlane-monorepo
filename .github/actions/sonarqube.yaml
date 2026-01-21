@@ -3,11 +3,9 @@ name: pruv-bridge-sc Sonarqube Scan
 on:
   push:
     branches:
-      - develop
       - main
   pull_request:
     branches:
-      - develop
       - main
     types: [closed]
 
