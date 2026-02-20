@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../schema.json
 blockExplorers:
   - apiUrl: https://kairos-oapi.kaiascan.io/api
-    family: routescan
+    family: kaiascan
     name: Kaiascan
     url: https://kairos.kaiascan.io
 blocks:
