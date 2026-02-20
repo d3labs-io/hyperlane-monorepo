@@ -4,6 +4,7 @@ import { buildArtifact } from '@hyperlane-xyz/core/buildArtifact.js';
 import {
   ChainMap,
   EvmERC20WarpRouteReader,
+  ExplorerFamily,
   ExplorerLicenseType,
   MultiProvider,
   PostDeploymentContractVerifier,
@@ -52,12 +53,11 @@ export async function runVerifyWarpRoute({
       logBlue(`Unsupported chain ${chainName}. Skipping.`);
       continue;
     }
+
     assert(token.addressOrDenom, 'Invalid addressOrDenom');
 
     const provider = multiProvider.getProvider(chainName);
     const isProxyContract = await isProxy(provider, token.addressOrDenom);
-
-    logGray(`Getting constructor args for ${chainName} using explorer API`);
 
     // Verify Implementation first because Proxy won't verify without it.
     const deployedContractAddress = isProxyContract
@@ -70,6 +70,40 @@ export async function runVerifyWarpRoute({
       deployedContractAddress,
     );
     const contractName = hypERC20contracts[tokenType];
+
+    const explorerFamily = chainMetadata[chainName]?.blockExplorers?.[0]?.family;
+    if (explorerFamily === ExplorerFamily.Kaiascan) {
+      // Kaiascan uses sourcify-compatible verification and verifies runtime
+      // (deployed) bytecode rather than creation bytecode. Constructor args are
+      // not required and must not be fetched via the Etherscan-compatible API
+      // (which Kaiascan does not expose). Build inputs with empty constructor
+      // args; KaiascanContractVerifier ignores them.
+      // Implementation
+      verificationInputs[chainName].push(
+        verificationUtils.buildVerificationInput(
+          contractName,
+          deployedContractAddress,
+          '',
+        ),
+      );
+      // Proxy contract source (TransparentUpgradeableProxy) — Kaiascan
+      // verifies the proxy's own source code at the proxy address.
+      if (isProxyContract) {
+        verificationInputs[chainName].push(
+          verificationUtils.buildVerificationInput(
+            'TransparentUpgradeableProxy',
+            token.addressOrDenom,
+            '',
+            true,
+            deployedContractAddress,
+          ),
+        );
+      }
+      continue;
+    }
+
+    logGray(`Getting constructor args for ${chainName} using explorer API`);
+
     const implementationInput = await verificationUtils.getImplementationInput({
       chainName,
       contractName,

@@ -51,6 +51,7 @@ import {
   proxyImplementation,
 } from './proxy.js';
 import { ContractVerifier } from './verify/ContractVerifier.js';
+import { KaiascanContractVerifier } from './verify/KaiascanContractVerifier.js';
 import { ZKSyncContractVerifier } from './verify/ZKSyncContractVerifier.js';
 import {
   ContractVerificationInput,
@@ -86,6 +87,7 @@ export abstract class HyperlaneDeployer<
   chainTimeoutMs: number;
 
   private zkSyncContractVerifier: ZKSyncContractVerifier;
+  private kaiascanContractVerifier: KaiascanContractVerifier;
 
   constructor(
     protected readonly multiProvider: MultiProvider,
@@ -112,6 +114,10 @@ export abstract class HyperlaneDeployer<
     );
 
     this.zkSyncContractVerifier = new ZKSyncContractVerifier(multiProvider);
+    this.kaiascanContractVerifier = new KaiascanContractVerifier(
+      multiProvider,
+      coreBuildArtifact,
+    );
   }
 
   cacheAddressesMap(addressesMap: HyperlaneAddressesMap<any>): void {
@@ -127,7 +133,9 @@ export abstract class HyperlaneDeployer<
     const verifier =
       explorerFamily === ExplorerFamily.ZkSync
         ? this.zkSyncContractVerifier
-        : this.options.contractVerifier;
+        : explorerFamily === ExplorerFamily.Kaiascan
+          ? this.kaiascanContractVerifier
+          : this.options.contractVerifier;
     return verifier?.verifyContract(chain, input, logger);
   }
 

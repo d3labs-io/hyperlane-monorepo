@@ -13,6 +13,7 @@ export function isEvmBlockExplorerAndNotEtherscan(
   const byFamily: Record<ExplorerFamily, boolean> = {
     [ExplorerFamily.Blockscout]: true,
     [ExplorerFamily.Etherscan]: false,
+    [ExplorerFamily.Kaiascan]: true,
     [ExplorerFamily.Other]: false,
     [ExplorerFamily.Routescan]: true,
     [ExplorerFamily.Voyager]: false,

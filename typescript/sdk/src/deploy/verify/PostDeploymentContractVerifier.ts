@@ -7,6 +7,7 @@ import { MultiGeneric } from '../../utils/MultiGeneric.js';
 
 import { BaseContractVerifier } from './BaseContractVerifier.js';
 import { ContractVerifier } from './ContractVerifier.js';
+import { KaiascanContractVerifier } from './KaiascanContractVerifier.js';
 import { ZKSyncContractVerifier } from './ZKSyncContractVerifier.js';
 import { BuildArtifact, CompilerOptions, VerificationInput } from './types.js';
 
@@ -16,6 +17,7 @@ export class PostDeploymentContractVerifier extends MultiGeneric<VerificationInp
   });
   protected contractVerifier: BaseContractVerifier;
   protected zkSyncContractVerifier: ZKSyncContractVerifier;
+  protected kaiascanContractVerifier: KaiascanContractVerifier;
 
   constructor(
     verificationInputs: ChainMap<VerificationInput>,
@@ -32,6 +34,10 @@ export class PostDeploymentContractVerifier extends MultiGeneric<VerificationInp
       licenseType,
     );
     this.zkSyncContractVerifier = new ZKSyncContractVerifier(multiProvider);
+    this.kaiascanContractVerifier = new KaiascanContractVerifier(
+      multiProvider,
+      buildArtifact,
+    );
   }
 
   verify(targets = this.chains()): Promise<PromiseSettledResult<void>[]> {
@@ -44,6 +50,11 @@ export class PostDeploymentContractVerifier extends MultiGeneric<VerificationInp
         if (family === ExplorerFamily.ZkSync) {
           this.logger.debug('Using ZkSync verifier');
           contractVerifier = this.zkSyncContractVerifier;
+        }
+
+        if (family === ExplorerFamily.Kaiascan) {
+          this.logger.debug('Using Kaiascan verifier');
+          contractVerifier = this.kaiascanContractVerifier;
         }
 
         if (family === ExplorerFamily.Other) {

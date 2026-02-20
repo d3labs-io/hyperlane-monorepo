@@ -131,6 +131,9 @@ export function shouldAddVerificationInput(
  */
 export const FamilyVerificationDelay = {
   [ExplorerFamily.Etherscan]: 40000,
+  // Kaiascan needs time to index a newly deployed contract before it can be
+  // verified. Without a sufficient delay the API returns {"error":"Unknown error"}.
+  [ExplorerFamily.Kaiascan]: 15000,
 } as const;
 
 /** Retrieves the constructor args using their respective Explorer and/or RPC (eth_getTransactionByHash)
@@ -173,6 +176,18 @@ export async function getConstructorArgumentsApi({
         multiProvider,
       });
       break;
+    case ExplorerFamily.Kaiascan:
+      // Kaiascan uses a sourcify-compatible verification API whose endpoint is
+      // separate from any Etherscan-compatible read API. Fetching constructor
+      // args post-deployment is therefore not supported via this path.
+      // During deployment, constructor args are embedded in the verification
+      // input directly, so this case is only reached by the post-deployment
+      // `warp verify` command, which should skip Kaiascan chains.
+      throw new Error(
+        `Post-deployment constructor args retrieval is not supported for ` +
+          `Kaiascan explorer on chain ${chainName}. ` +
+          `Use deployment-time auto-verification instead.`,
+      );
     default:
       throw new Error(`Explorer Family ${family} unsupported`);
   }

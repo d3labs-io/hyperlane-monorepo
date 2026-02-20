@@ -125,6 +125,7 @@ export {
   VerificationInput,
 } from './deploy/verify/types.js';
 export * as verificationUtils from './deploy/verify/utils.js';
+export { KaiascanContractVerifier } from './deploy/verify/KaiascanContractVerifier.js';
 export { ZKSyncContractVerifier } from './deploy/verify/ZKSyncContractVerifier.js';
 export { executeWarpDeploy, enrollCrossChainRouters } from './deploy/warp.js';
 export {
