@@ -1,0 +1,13 @@
+chainId: 13375
+displayName: Solana Local
+domainId: 13375
+isTestnet: true
+name: solalocal
+nativeToken:
+  decimals: 9
+  name: Solana
+  symbol: SOL
+protocol: sealevel
+rpcUrls:
+  - http: http://127.0.0.1:8899
+technicalStack: other

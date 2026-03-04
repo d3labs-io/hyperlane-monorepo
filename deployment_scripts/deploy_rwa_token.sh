@@ -87,11 +87,24 @@ else
     exit 1
 fi
 
+# Determine the source chain name based on environment
+if [ "$ENVIRONMENT" == "testnet" ]; then
+    SOURCE_CHAIN="pruvtest"
+else
+    SOURCE_CHAIN="pruv"
+fi
+
 # Process chains
 IFS=',' read -ra CHAIN_ARRAY <<< "$CHAINS"
 for chain in "${CHAIN_ARRAY[@]}"; do
     # Trim whitespace
     chain=$(echo "$chain" | xargs)
+    
+    # Skip if the chain is the source chain (already defined in base template)
+    if [ "$chain" == "$SOURCE_CHAIN" ]; then
+        echo "Skipping $chain (source chain is already included in base template)"
+        continue
+    fi
     
     if [ -n "$chain" ]; then
         # Append other_chain.yaml with replacement
@@ -128,7 +141,7 @@ rm -rf typescript/cli/.hyperlane/deployments/warp_routes/*
 
 echo "Running Warp Route Deployment..."
 cd typescript/cli
-HYP_KEY="$DEPLOYER_KEY" yarn hyperlane warp deploy --config configs/warp-route-deployment.yaml --registry .hyperlane
+HYP_KEY="$DEPLOYER_KEY" yarn hyperlane warp deploy --config configs/warp-route-deployment.yaml --registry .hyperlane --yes
 
 # Find the latest modified deployment directory
 LATEST_DEPLOYMENT_DIR=$(ls -td .hyperlane/deployments/warp_routes/*/ | head -n 1)

@@ -10,3 +10,15 @@ sealeveltest2:
   name: sealeveltest2
   rpcUrls:
   - http: http://127.0.0.1:8899
+solalocal:
+  domainId: 13375
+  isTestnet: true
+  name: solalocal
+  rpcUrls:
+  - http: http://127.0.0.1:8899
+evmtest2:
+  domainId: 31338
+  isTestnet: true
+  name: evmtest2
+  rpcUrls:
+  - http: http://127.0.0.1:8546

@@ -1,0 +1,10 @@
+{
+  "evmtest2": {
+    "hex": "0x0000000000000000000000004ed7c70f96b99c776995fb64377f0d4ab3b0e1c1",
+    "base58": "11111111111126i4ixvaXhCca67wyMRPdA2QHps2"
+  },
+  "solalocal": {
+    "hex": "0xcf5f92988fbfc3a3ad9fb9aa9646d8ab0129a9b3ff8a0e9132b85c065825d2a1",
+    "base58": "ExVvGNtKBiqdpoxkRNbNhJTzZ6P7JxcsMiPrxL6b4pgx"
+  }
+}

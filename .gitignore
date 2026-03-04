@@ -34,3 +34,7 @@ tsconfig.editor.json
 # yalc
 yalc.lock
 .yalc
+
+# Local test artifacts
+test-ledger/
+.hyperlane-agents-temp

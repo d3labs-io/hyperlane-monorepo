@@ -1,0 +1,13 @@
+chainId: 31338
+displayName: EVM Test Chain 2
+domainId: 31338
+isTestnet: true
+name: evmtest2
+nativeToken:
+  decimals: 18
+  name: Ether
+  symbol: ETH
+protocol: ethereum
+rpcUrls:
+  - http: http://127.0.0.1:8546
+technicalStack: other
