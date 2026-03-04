@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../schema.json
+tokens:
+  - addressOrDenom: "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1"
+    chainName: evmtest2
+    collateralAddressOrDenom: "0x68B1D87F95878fE05B998F19b66F4baba5De1aed"
+    connections:
+      - token: ethereum|test4|0x59b670e9fA9D0A427751Af201D676719a970857b
+    decimals: 18
+    name: RWA Token
+    standard: EvmHypCollateral
+    symbol: RWA
+  - addressOrDenom: "0x59b670e9fA9D0A427751Af201D676719a970857b"
+    chainName: test4
+    connections:
+      - token: ethereum|evmtest2|0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1
+    decimals: 18
+    name: RWA Token
+    standard: EvmHypSynthetic
+    symbol: RWA

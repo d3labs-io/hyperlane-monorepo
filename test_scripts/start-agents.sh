@@ -13,6 +13,12 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}🚀 Starting Hyperlane Agents for Local 3-Chain Setup${NC}"
 echo ""
 
+# Kill any leftover agents from previous runs
+pkill -f "target/debug/validator" 2>/dev/null || true
+pkill -f "target/debug/relayer" 2>/dev/null || true
+sleep 1
+rm -rf /Users/sotatek/Desktop/pruv-bridge-sc/rust/main/hyperlane_db 2>/dev/null || true
+
 # Create temp directories for databases and checkpoints
 TEMP_DIR=$(mktemp -d)
 VALIDATOR_EVMTEST1_DB="$TEMP_DIR/validator-evmtest1"
@@ -70,19 +76,22 @@ start_validator() {
     local rpc_url=$4
     local metrics_port=$5
 
+    local chain_upper=$(echo "$chain_name" | tr '[:lower:]' '[:upper:]')
+
     echo -e "${YELLOW}🔍 Starting validator for $chain_name...${NC}"
     
     cd "$AGENT_WORKING_DIR"
-    HYP_BASE_CHAINS_${chain_name^^}_RPCURLS="$rpc_url" \
-    HYP_BASE_CHAINS_${chain_name^^}_BLOCKS_REORGPERIOD="0" \
-    HYP_BASE_ORIGINCHAINNAME="$chain_name" \
-    HYP_BASE_DB="$db_path" \
-    HYP_BASE_METRICSPORT="$metrics_port" \
-    HYP_BASE_TRACING_LEVEL="info" \
-    HYP_VALIDATOR_VALIDATOR_KEY="$VALIDATOR_KEY" \
-    HYP_VALIDATOR_CHECKPOINTSYNCER_TYPE="localStorage" \
-    HYP_VALIDATOR_CHECKPOINTSYNCER_PATH="$checkpoint_path" \
-    HYP_VALIDATOR_INTERVAL="5" \
+    env \
+    "HYP_CHAINS_${chain_upper}_CONNECTION_URLS=$rpc_url" \
+    "HYP_CHAINS_${chain_upper}_BLOCKS_REORGPERIOD=0" \
+    HYP_ORIGINCHAINNAME="$chain_name" \
+    HYP_DB="$db_path" \
+    HYP_METRICSPORT="$metrics_port" \
+    HYP_TRACING_LEVEL="info" \
+    HYP_VALIDATOR_KEY="$VALIDATOR_KEY" \
+    HYP_CHECKPOINTSYNCER_TYPE="localStorage" \
+    HYP_CHECKPOINTSYNCER_PATH="$checkpoint_path" \
+    HYP_INTERVAL="5" \
     CONFIG_FILES="$AGENT_CONFIG_PATH" \
     "$VALIDATOR_BIN" > "$TEMP_DIR/validator-$chain_name.log" 2>&1 &
     cd - > /dev/null
@@ -96,18 +105,18 @@ start_relayer() {
     echo -e "${YELLOW}🔄 Starting relayer...${NC}"
     
     cd "$AGENT_WORKING_DIR"
-    HYP_BASE_CHAINS_TEST4_RPCURLS="http://127.0.0.1:8545" \
-    HYP_BASE_CHAINS_EVMTEST2_RPCURLS="http://127.0.0.1:8546" \
-    HYP_BASE_CHAINS_SEALEVELTEST1_RPCURLS="http://127.0.0.1:8899" \
-    HYP_BASE_CHAINS_TEST4_BLOCKS_REORGPERIOD="0" \
-    HYP_BASE_CHAINS_EVMTEST2_BLOCKS_REORGPERIOD="0" \
-    HYP_BASE_CHAINS_SEALEVELTEST1_BLOCKS_REORGPERIOD="0" \
-    HYP_BASE_DB="$RELAYER_DB" \
-    HYP_BASE_METRICSPORT="9093" \
-    HYP_BASE_TRACING_LEVEL="info" \
-    HYP_RELAYER_ALLOWLOCALCHECKPOINTSYNCERS="true" \
-    HYP_RELAYER_DEFAULTSIGNER_KEY="$VALIDATOR_KEY" \
-    HYP_RELAYER_GASPAYMENTENFORCEMENT='[{"type":"none"}]' \
+    HYP_CHAINS_TEST4_CONNECTION_URLS="http://127.0.0.1:8545" \
+    HYP_CHAINS_EVMTEST2_CONNECTION_URLS="http://127.0.0.1:8546" \
+    HYP_CHAINS_SEALEVELTEST1_CONNECTION_URLS="http://127.0.0.1:8899" \
+    HYP_CHAINS_TEST4_BLOCKS_REORGPERIOD="0" \
+    HYP_CHAINS_EVMTEST2_BLOCKS_REORGPERIOD="0" \
+    HYP_CHAINS_SEALEVELTEST1_BLOCKS_REORGPERIOD="0" \
+    HYP_DB="$RELAYER_DB" \
+    HYP_METRICSPORT="9093" \
+    HYP_TRACING_LEVEL="info" \
+    HYP_ALLOWLOCALCHECKPOINTSYNCERS="true" \
+    HYP_DEFAULTSIGNER_KEY="$VALIDATOR_KEY" \
+    HYP_GASPAYMENTENFORCEMENT='[{"type":"none"}]' \
     CONFIG_FILES="$AGENT_CONFIG_PATH" \
     "$RELAYER_BIN" > "$TEMP_DIR/relayer.log" 2>&1 &
     cd - > /dev/null

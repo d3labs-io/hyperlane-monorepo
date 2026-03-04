@@ -7,7 +7,7 @@
       "domainId": 31337,
       "mailbox": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
       "merkleTreeHook": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-      "interchainGasPaymaster": "0x8f9C3888bFC8a5B25AED115A82eCbb788b196d2a",
+      "interchainGasPaymaster": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
       "validatorAnnounce": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
       "protocol": "ethereum",
       "blocks": {
@@ -30,7 +30,7 @@
       "domainId": 31338,
       "mailbox": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
       "merkleTreeHook": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-      "interchainGasPaymaster": "0x8f9C3888bFC8a5B25AED115A82eCbb788b196d2a",
+      "interchainGasPaymaster": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
       "validatorAnnounce": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
       "protocol": "ethereum",
       "blocks": {
@@ -51,10 +51,10 @@
       "name": "sealeveltest1",
       "chainId": 13375,
       "domainId": 13375,
-      "mailbox": "D96BqySvxqWafBsuC7ijJzFV7iPiKWDYLx2sFd7zp4ej",
-      "merkleTreeHook": "D96BqySvxqWafBsuC7ijJzFV7iPiKWDYLx2sFd7zp4ej",
-      "interchainGasPaymaster": "DTjFLW3pzoqX8aens8J8zA9M5uFrfZJxPFGo2BfMzitx",
-      "validatorAnnounce": "Ed67tja86w87YEPST9QBCSDz2an5ue11py9NjiSHCYHR",
+      "mailbox": "692KZJaoe2KRcD6uhCQDLLXnLNA5ZLnfvdqjE4aX9iu1",
+      "merkleTreeHook": "692KZJaoe2KRcD6uhCQDLLXnLNA5ZLnfvdqjE4aX9iu1",
+      "interchainGasPaymaster": "GwHaw8ewMyzZn9vvrZEnTEAAYpLdkGYs195XWcLDCN4U",
+      "validatorAnnounce": "DH43ae1LwemXAboWwSh8zc9pG8j72gKUEXNi57w8fEnn",
       "protocol": "sealevel",
       "blocks": {
         "reorgPeriod": 0,

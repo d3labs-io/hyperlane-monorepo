@@ -20,12 +20,42 @@ Complete guide to set up the local Hyperlane bridge (EVM-EVM and EVM-Solana) aft
 | evmtest2      | EVM    | 31338             | 8546 | http://127.0.0.1:8546 |
 | sealeveltest1 | Solana | 13375             | 8899 | http://127.0.0.1:8899 |
 
-Default Anvil key (used for all deployments):
+## Key Reference
+
+**EVM** -- Default Anvil key (used for all EVM deployments and agent signing):
 
 ```
 Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 Address:     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 ```
+
+**Solana** -- Two addresses are needed. Here is how to get them:
+
+1. **Deployer keypair** -- stored as a JSON file at `~/.config/solana/local-deployer.json`. Get its public key:
+
+```bash
+solana-keygen pubkey ~/.config/solana/local-deployer.json
+```
+
+If this file does not exist yet, create it once:
+
+```bash
+solana-keygen new -o ~/.config/solana/local-deployer.json --no-bip39-passphrase
+solana config set --keypair ~/.config/solana/local-deployer.json
+solana config set --url http://127.0.0.1:8899
+```
+
+2. **Relayer Solana payer** -- derived from the default Anvil hex key. Get its public key:
+
+```bash
+node -e "
+const { Keypair } = require('@solana/web3.js');
+const seed = Buffer.from('ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', 'hex');
+console.log(Keypair.fromSeed(seed).publicKey.toBase58());
+"
+```
+
+Both addresses persist across restarts (the keypair files don't change), but their on-chain SOL balances are lost when you run `solana-test-validator --reset`.
 
 ---
 
@@ -49,9 +79,20 @@ anvil --port 8546 --chain-id 31338
 solana-test-validator --reset
 ```
 
+After the validator starts, fund both Solana accounts in a separate terminal (replace with your actual public keys from the Key Reference above):
+
+```bash
+solana airdrop 100 <DEPLOYER_PUBKEY> --url http://127.0.0.1:8899
+solana airdrop 10 <RELAYER_PAYER_PUBKEY> --url http://127.0.0.1:8899
+```
+
+No files to modify after this step.
+
 ---
 
 ## Step 2: Deploy Hyperlane Core (EVM)
+
+> **IMPORTANT:** The config file `typescript/cli/examples/core-config.yaml` must have `defaultHook: type: merkleTreeHook` and `requiredHook: type: protocolFee`. Without a MerkleTreeHook as the default hook, validators cannot produce checkpoints and the Solana MultisigISM cannot verify messages.
 
 ```bash
 cd typescript/cli
@@ -75,6 +116,23 @@ node dist/cli.js core deploy \
 
 Both chains use deterministic deployment so addresses are the same each time on a fresh Anvil.
 
+Record these addresses from the output (they appear in `.hyperlane/chains/<chain>/addresses.yaml`):
+
+| Field                    | Purpose                                      |
+| ------------------------ | -------------------------------------------- |
+| `mailbox`                | Central hub for message dispatch/processing  |
+| `merkleTreeHook`         | Tracks dispatched messages in a merkle tree  |
+| `validatorAnnounce`      | Where validators register checkpoint storage |
+| `interchainGasPaymaster` | (protocolFee address from `requiredHook`)    |
+
+**Files to modify after this step:**
+
+1. **`agent-config.json`** -- update for **both** `test4` and `evmtest2`:
+   - `mailbox` -- from deployment output
+   - `merkleTreeHook` -- from deployment output (this must be the MerkleTreeHook, **not** the ProtocolFee hook)
+   - `validatorAnnounce` -- from deployment output (this must be the ValidatorAnnounce contract, **not** the testRecipient)
+   - `interchainGasPaymaster` -- the protocolFee (requiredHook) address
+
 ---
 
 ## Step 3: Deploy Hyperlane Core (Solana)
@@ -85,16 +143,16 @@ cd rust/sealevel
 ./target/debug/hyperlane-sealevel-client core deploy \
   --local-domain 13375 \
   --environment local-e2e \
-  --environments-dir ./environments/local-e2e \
+  --environments-dir ./environments \
   --chain sealeveltest1 \
   --built-so-dir ./target/deploy
 ```
 
-Output writes program IDs to `environments/local-e2e/local-e2e/sealeveltest1/core/program-ids.json`.
+Output writes program IDs to `environments/local-e2e/sealeveltest1/core/program-ids.json`.
 
-### Files to update after Solana core deploy
+**Files to modify after this step:**
 
-**`rust/sealevel/environments/local-e2e/solalocal/core/program-ids.json`** -- copy the program IDs from the output above so the `solalocal` environment matches:
+1. **`rust/sealevel/environments/local-e2e/solalocal/core/program-ids.json`** -- copy all program IDs from the deployment output so the `solalocal` environment matches:
 
 ```json
 {
@@ -107,7 +165,11 @@ Output writes program IDs to `environments/local-e2e/local-e2e/sealeveltest1/cor
 }
 ```
 
-**`agent-config.json`** -- update the `sealeveltest1` section with the new `mailbox`, `interchainGasPaymaster`, and `validatorAnnounce` addresses from the deployment output.
+2. **`agent-config.json`** -- update the `sealeveltest1` section with the new addresses:
+   - `mailbox` -- the mailbox program ID from deployment output
+   - `merkleTreeHook` -- same as mailbox (on Solana the mailbox handles the merkle tree internally)
+   - `interchainGasPaymaster` -- the `igp_program_id` from deployment output
+   - `validatorAnnounce` -- from deployment output
 
 ---
 
@@ -115,63 +177,52 @@ Output writes program IDs to `environments/local-e2e/local-e2e/sealeveltest1/cor
 
 ```bash
 cd external_contracts/deployment-asset-script
-
 TOKEN_NAME="RWA Token" TOKEN_SYMBOL="RWA" \
 npx hardhat run scripts/deploy.ts --network evmtest2
 ```
 
-Save the deployed token address from the output.
+Save the deployed token address from the output (e.g. `0x68B1D87F95878fE05B998F19b66F4baba5De1aed`).
 
----
+**Files to modify after this step:**
 
-## Step 5: Create Warp Route Config
-
-Create `typescript/cli/configs/local-evm-evm-warp.yaml`:
+1. **`typescript/cli/configs/local-warp-route.yaml`** -- create or update this file with the token address (decimals are required):
 
 ```yaml
 ---
 evmtest2:
   type: collateral
-  token: '<RWA_TOKEN_ADDRESS_FROM_STEP_4>'
-
+  token: '<RWA_TOKEN_ADDRESS>'
+  owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+  name: 'RWA Token'
+  symbol: 'RWA'
+  decimals: 18
 test4:
   type: synthetic
+  owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+  name: 'RWA Token'
+  symbol: 'RWA'
+  decimals: 18
 ```
 
 ---
 
-## Step 6: Deploy EVM Warp Routes
+## Step 5: Deploy EVM Warp Routes
 
 ```bash
 cd typescript/cli
 
+HYP_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
 node dist/cli.js warp deploy \
-  --config configs/local-evm-evm-warp.yaml \
-  --key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  --yes \
-  --registry .hyperlane
+  --config configs/local-warp-route.yaml \
+  --registry .hyperlane \
+  --yes
 ```
 
-Deployment config is saved to `.hyperlane/deployments/warp_routes/RWA/local-evm-evm-warp-config.yaml`.
+Deployment config is automatically saved to `.hyperlane/deployments/warp_routes/RWA/local-evm-evm-warp-config.yaml`. Note the evmtest2 warp address from the output (e.g. `0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1`).
 
----
+**Files to modify after this step (only needed for Solana bridge):**
 
-## Step 7: Enroll EVM Routers
-
-```bash
-# From repo root
-npx ts-node enroll-routers-simple.ts
-```
-
-This reads addresses automatically from the deployment config.
-
----
-
-## Step 8: Deploy Solana Warp Route (for EVM-Solana bridge)
-
-### 8.1 Update Solana token config
-
-Edit `rust/sealevel/environments/local-e2e/warp-routes/rwa-local/token-config.json` -- set the `foreignDeployment` value under `evmtest2` to the evmtest2 warp address from Step 6:
+1. **`rust/sealevel/environments/local-e2e/warp-routes/rwa-local/token-config.json`** -- set `evmtest2.foreignDeployment` to the evmtest2 warp address:
 
 ```json
 {
@@ -190,7 +241,38 @@ Edit `rust/sealevel/environments/local-e2e/warp-routes/rwa-local/token-config.js
 }
 ```
 
-### 8.2 Deploy Solana warp route
+---
+
+## Step 6: Enroll EVM Routers
+
+```bash
+# From repo root
+npx ts-node enroll-routers-simple.ts
+```
+
+This reads addresses automatically from the deployment config. No files to modify after this step.
+
+---
+
+## Step 7: Deploy Solana Warp Route (for EVM-Solana bridge)
+
+### 7.1 Deploy Solana warp route
+
+Ensure `rust/sealevel/.hyperlane/chains/metadata.yaml` exists with chain RPC URLs and required fields (`domainId`, `name`, `isTestnet`, `rpcUrls`). If missing, copy from `environments/local-e2e/mock-registry/chains/metadata.yaml`.
+
+If the Solana validator was reset, regenerate the warp route keypairs:
+
+```bash
+cd rust/sealevel/environments/local-e2e/warp-routes/rwa-local/keys
+solana-keygen new -o hyperlane_sealevel_token-solalocal-keypair.json --no-bip39-passphrase --force
+solana-keygen new -o hyperlane_sealevel_token-solalocal-buffer.json --no-bip39-passphrase --force
+```
+
+Also clear `program-ids.json` to force a fresh deployment:
+
+```bash
+echo '{}' > rust/sealevel/environments/local-e2e/warp-routes/rwa-local/program-ids.json
+```
 
 ```bash
 cd rust/sealevel
@@ -204,11 +286,25 @@ yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
   --registry .hyperlane
 ```
 
-Note the deployed Solana Program ID and its hex representation from the output.
+Note the deployed Solana Program ID (base58) and its hex representation from the output.
 
-### 8.3 Configure Solana ISM validators
+**Files to modify after this sub-step:**
 
-Set the EVM validator for domains 31337 (test4) and 31338 (evmtest2) on the Solana multisig ISM:
+1. **`enroll-solana-simple.ts`** -- update these constants:
+
+   - `SOLANA_PROGRAM` -- base58 program ID from output
+   - `programBytes32` -- hex representation from output
+   - `WARP_EVMTEST2` -- evmtest2 warp address from Step 5
+
+2. **`test-evm-to-solana.ts`** -- update these constants:
+   - `RWA_TOKEN` -- token address from Step 4
+   - `WARP_EVMTEST2` -- evmtest2 warp address from Step 5
+   - `SOLANA_PROGRAM` -- base58 program ID from output
+   - `expectedRouter` -- hex representation from output
+
+### 7.2 Configure Solana ISM validators
+
+Set the EVM validator for domains 31337 (test4) and 31338 (evmtest2) on the Solana multisig ISM. Use the `multisig_ism_message_id` program ID from Step 3:
 
 ```bash
 cd rust/sealevel
@@ -218,55 +314,42 @@ cd rust/sealevel
   --program-id <MULTISIG_ISM_PROGRAM_ID> \
   --domain 31338 \
   --validators 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --threshold 1 \
-  --environment local-e2e \
-  --environments-dir ./environments/local-e2e \
-  --chain sealeveltest1 \
-  --built-so-dir ./target/deploy
+  --threshold 1
 
 # For test4 (domain 31337)
 ./target/debug/hyperlane-sealevel-client multisig-ism-message-id set-validators-and-threshold \
   --program-id <MULTISIG_ISM_PROGRAM_ID> \
   --domain 31337 \
   --validators 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --threshold 1 \
-  --environment local-e2e \
-  --environments-dir ./environments/local-e2e \
-  --chain sealeveltest1 \
-  --built-so-dir ./target/deploy
+  --threshold 1
 ```
 
-### 8.4 Fund Solana accounts
+### 7.3 Fund the ATA payer PDA
 
-The relayer's Solana payer and the warp route's ATA payer PDA need SOL:
+The warp route's ATA payer PDA needs SOL to create token accounts for recipients. Derive it from the warp route program ID:
 
 ```bash
-# Fund the relayer payer (derive address from the default key)
-solana airdrop 10 <RELAYER_SOLANA_PAYER_PUBKEY> --url http://127.0.0.1:8899
+node -e "
+const { PublicKey } = require('@solana/web3.js');
+const programId = new PublicKey('<SOLANA_WARP_PROGRAM_ID_FROM_STEP_7.1>');
+const [pda] = PublicKey.findProgramAddressSync(
+  [Buffer.from('hyperlane_token'), Buffer.from('-'), Buffer.from('ata_payer')],
+  programId
+);
+console.log('ATA Payer PDA:', pda.toBase58());
+"
+```
 
-# Fund the ATA payer PDA for the warp route
+Then fund it:
+
+```bash
 solana transfer <ATA_PAYER_PDA> 5 \
   --url http://127.0.0.1:8899 \
   --keypair ~/.config/solana/local-deployer.json \
   --allow-unfunded-recipient
 ```
 
-### 8.5 Update scripts with new Solana program ID
-
-**`enroll-solana-simple.ts`** -- update these constants:
-
-- `SOLANA_PROGRAM` -- the base58 program ID from step 8.2
-- `programBytes32` -- the hex representation from step 8.2
-- `WARP_EVMTEST2` -- the evmtest2 warp address from Step 6
-
-**`test-evm-to-solana.ts`** -- update these constants:
-
-- `RWA_TOKEN` -- token address from Step 4
-- `WARP_EVMTEST2` -- evmtest2 warp address from Step 6
-- `SOLANA_PROGRAM` -- base58 program ID from step 8.2
-- `expectedRouter` -- hex representation from step 8.2
-
-### 8.6 Enroll Solana router on EVM
+### 7.4 Enroll Solana router on EVM
 
 ```bash
 # From repo root
@@ -275,7 +358,7 @@ npx ts-node enroll-solana-simple.ts
 
 ---
 
-## Step 9: Start Agents
+## Step 8: Start Agents
 
 ```bash
 # From repo root
@@ -299,9 +382,9 @@ Stop agents:
 
 ---
 
-## Step 10: Test the Bridge
+## Step 9: Test the Bridge
 
-### EVM-EVM test
+### 9.1 EVM-EVM test
 
 ```bash
 # Mint tokens first (only needed once after deploy)
@@ -311,36 +394,82 @@ npx ts-node mint-tokens.ts
 npx ts-node test-bridge-auto.ts
 ```
 
-### EVM-Solana test
+The script will print balances before and after. A successful run shows the sender's balance decrease and the recipient's balance increase.
+
+### 9.2 EVM-Solana test
 
 ```bash
 npx ts-node test-evm-to-solana.ts
 ```
 
----
+The EVM side is successful when you see `TX confirmed!`. The Solana side is delivered asynchronously by the relayer.
 
-## Post-Deployment File Modification Summary
+### 9.3 How to verify the Solana bridge succeeded
 
-After redeploying, these files need manual updates with new addresses:
+There are three ways to confirm the EVM → Solana transfer completed:
 
-| File                                                                           | What to update                                                   | When                              |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------- | --------------------------------- |
-| `rust/sealevel/environments/local-e2e/solalocal/core/program-ids.json`         | All Solana core program IDs                                      | After Solana core deploy (Step 3) |
-| `agent-config.json`                                                            | `sealeveltest1` mailbox, IGP, validatorAnnounce                  | After Solana core deploy (Step 3) |
-| `typescript/cli/configs/local-evm-evm-warp.yaml`                               | RWA token address under `evmtest2.token`                         | After RWA token deploy (Step 4)   |
-| `rust/sealevel/environments/local-e2e/warp-routes/rwa-local/token-config.json` | `evmtest2.foreignDeployment` (EVM warp address)                  | After EVM warp deploy (Step 6)    |
-| `enroll-solana-simple.ts`                                                      | `SOLANA_PROGRAM`, `programBytes32`, `WARP_EVMTEST2`              | After Solana warp deploy (Step 8) |
-| `test-evm-to-solana.ts`                                                        | `RWA_TOKEN`, `WARP_EVMTEST2`, `SOLANA_PROGRAM`, `expectedRouter` | After Solana warp deploy (Step 8) |
+**Method A — Check relayer logs (fastest)**
 
-EVM addresses are deterministic on fresh Anvil instances so they typically stay the same. Solana addresses change on every `solana-test-validator --reset` unless keypairs are reused.
+Watch the terminal where `start-agents.sh` is running. A successful delivery looks like:
+
+```
+Delivering message ... to sealeveltest1
+Message delivered on sealeveltest1
+```
+
+If you see `Repreparing message` or `Unable to reach quorum`, the delivery is still retrying.
+
+**Method B — Check the Solana token account balance**
+
+After the relayer delivers, a new SPL token account is created on Solana. Query it with:
+
+```bash
+# Replace <SOLANA_WARP_PROGRAM_ID> with the warp program from Step 7.1
+# This derives the mint address used by the warp route
+node -e "
+const { PublicKey } = require('@solana/web3.js');
+const programId = new PublicKey('<SOLANA_WARP_PROGRAM_ID>');
+const [mint] = PublicKey.findProgramAddressSync(
+  [Buffer.from('hyperlane_token'), Buffer.from('-'), Buffer.from('mint')],
+  programId
+);
+console.log('SPL Mint:', mint.toBase58());
+"
+
+# Then list all token accounts for that mint
+spl-token accounts --owner <RECIPIENT_SOLANA_PUBKEY> --url http://127.0.0.1:8899
+```
+
+If a token account exists with a non-zero balance, the bridge succeeded.
+
+**Method C — Check the Solana transaction history**
+
+```bash
+# List recent transactions on the warp route program
+solana transaction-history <SOLANA_WARP_PROGRAM_ID> --url http://127.0.0.1:8899 --limit 5
+```
+
+You should see a new transaction after the relayer delivers the message.
+
+### Troubleshooting delivery
+
+| Symptom                               | Cause                                         | Fix                                                                                                 |
+| ------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `CALL_EXCEPTION` on EVM side          | Missing protocol fee                          | The `transferRemote` call needs ETH value. The test script calls `quoteGasPayment()` automatically. |
+| `Repreparing message` in relayer logs | ISM not configured or validator not announced | Run Step 7.2 (ISM config) and restart agents.                                                       |
+| `Transfer: insufficient lamports`     | ATA payer PDA has no SOL                      | Fund the ATA payer PDA (Step 7.3).                                                                  |
+| No logs mentioning Solana at all      | Agent config missing `sealeveltest1`          | Ensure `agent-config.json` has the Solana chain entry.                                              |
+| `Unable to reach quorum`              | Validators not running or not signing         | Check validator processes and checkpoint files under `/tmp/hyperlane-validator-*`.                  |
 
 ---
 
 ## What Persists Between Restarts
 
-**Persisted:** source code, scripts, config files, built binaries, Solana program keypairs.
+**Persisted:** source code, scripts, config files, built binaries, Solana program keypairs (`~/.config/solana/local-deployer.json`).
 
-**Lost on restart:** all EVM contract state, Solana ledger state, agent checkpoints and databases.
+**Lost on restart:** all EVM contract state, Solana ledger state (balances, deployed programs), agent checkpoints and databases.
+
+EVM addresses are deterministic on fresh Anvil instances so they stay the same every time. Solana program addresses change on every `solana-test-validator --reset` unless the same keypairs are reused.
 
 ---
 
@@ -353,16 +482,16 @@ Use the corrected command from Step 3 (no `--ism` or `--use-existing-keys` flags
 Use `enroll-routers-simple.ts` which has no external dependencies.
 
 **"No contract found at address" / "call revert exception":**
-Contracts need redeploying after an Anvil restart. Follow Steps 2-7 in order.
+Contracts need redeploying after an Anvil restart. Follow Steps 2-6 in order.
 
 **"No return data from InboxGetRecipientIsm instruction":**
 The Solana warp route was initialized with a different mailbox than what agents use. Ensure `solalocal/core/program-ids.json` matches the active `sealeveltest1` core deployment, then redeploy the warp route.
 
 **"Validator has not announced any storage locations":**
-Run the ISM validator configuration commands from Step 8.3.
+Run the ISM validator configuration commands from Step 7.2.
 
 **"Transfer: insufficient lamports" in relayer logs:**
-Fund the ATA payer PDA and/or relayer payer as described in Step 8.4.
+Fund the ATA payer PDA (Step 7.3) and/or relayer payer (Step 1).
 
 **Agents not starting:**
 

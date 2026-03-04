@@ -9,6 +9,7 @@ const ERC20_ABI = [
 
 const WARP_ABI = [
   'function transferRemote(uint32 _destinationDomain, bytes32 _recipient, uint256 _amount) external payable returns (bytes32 messageId)',
+  'function quoteGasPayment(uint32 _destinationDomain) external view returns (uint256)',
   'function balanceOf(address account) external view returns (uint256)',
   'function routers(uint32 _domain) external view returns (bytes32)',
 ];
@@ -20,7 +21,7 @@ async function testEvmToSolanaBridge() {
   const RWA_TOKEN = '0x68B1D87F95878fE05B998F19b66F4baba5De1aed';
   const WARP_EVMTEST2 = '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1';
   const SOLANA_DOMAIN = 13375;
-  const SOLANA_PROGRAM = 'ExVvGNtKBiqdpoxkRNbNhJTzZ6P7JxcsMiPrxL6b4pgx';
+  const SOLANA_PROGRAM = 'CTpKf6FF4PYb1h9yvraHK74Lo77SVqdqxoKms2GsUg5g';
 
   console.log('📝 Configuration:');
   console.log(`  RWA Token: ${RWA_TOKEN}`);
@@ -42,9 +43,19 @@ async function testEvmToSolanaBridge() {
   // Setup Solana
   const solanaConnection = new Connection('http://127.0.0.1:8899', 'confirmed');
 
-  // For Solana recipient, we'll use the EVM wallet address converted to bytes32
-  // In a real scenario, you'd use an actual Solana wallet
-  const recipientBytes32 = ethers.utils.hexZeroPad(evmWallet.address, 32);
+  // Use the Solana deployer's public key as the recipient (a valid ed25519 key on Solana)
+  const { Keypair } = require('@solana/web3.js');
+  const solanaDeployer =
+    require('os').homedir() + '/.config/solana/local-deployer.json';
+  const deployerKeypairData = require('fs').readFileSync(
+    solanaDeployer,
+    'utf8',
+  );
+  const deployerPubkeyBytes = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(deployerKeypairData)),
+  ).publicKey.toBytes();
+  const recipientBytes32 =
+    '0x' + Buffer.from(deployerPubkeyBytes).toString('hex');
 
   console.log('👤 Accounts:');
   console.log(`  EVM Sender: ${evmWallet.address}`);
@@ -65,7 +76,7 @@ async function testEvmToSolanaBridge() {
     console.log('🔍 Step 2: Verify Solana router enrollment');
     const solanaRouter = await warpContract.routers(SOLANA_DOMAIN);
     const expectedRouter =
-      '0xcf5f92988fbfc3a3ad9fb9aa9646d8ab0129a9b3ff8a0e9132b85c065825d2a1';
+      '0xaa4f29fc4f1357f7dc61c43404446b69fef3e3c304517620a7c2870b74699883';
 
     console.log(`  Current router: ${solanaRouter}`);
     console.log(`  Expected: ${expectedRouter}`);
@@ -103,11 +114,14 @@ async function testEvmToSolanaBridge() {
     console.log(`  Recipient: ${recipientBytes32}`);
     console.log('');
 
+    const quote = await warpContract.quoteGasPayment(SOLANA_DOMAIN);
+    console.log(`  Protocol fee: ${ethers.utils.formatEther(quote)} ETH`);
+
     const bridgeTx = await warpContract.transferRemote(
       SOLANA_DOMAIN,
       recipientBytes32,
       amountToTransfer,
-      { gasLimit: 500000 },
+      { gasLimit: 500000, value: quote },
     );
 
     console.log(`  TX submitted: ${bridgeTx.hash}`);
