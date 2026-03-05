@@ -598,6 +598,156 @@ pkill -f relayer; pkill -f validator
 
 ---
 
+## Adding a New Token to the Bridge
+
+This section explains how to bridge an **additional** ERC20 token (e.g. "USDC") alongside the existing RWA token. You do **not** need to redeploy Hyperlane core or restart agents — only new warp routes are needed.
+
+### Prerequisites
+
+- Steps 1–3 completed (chains running, core deployed on EVM + Solana)
+- Agents running (Step 8)
+
+### A1. Deploy the new ERC20 token
+
+```bash
+cd external_contracts/deployment-asset-script
+TOKEN_NAME="USDC Token" TOKEN_SYMBOL="USDC" \
+npx hardhat run scripts/deploy.ts --network evmtest2
+```
+
+Save the deployed address (e.g. `0xNEW_TOKEN_ADDRESS`).
+
+### A2. Create a new warp route config
+
+Create a **new** config file — do not overwrite the existing one, since each token gets its own warp route:
+
+```bash
+# typescript/cli/configs/local-warp-route-usdc.yaml
+```
+
+```yaml
+---
+evmtest2:
+  type: collateral
+  token: '<NEW_TOKEN_ADDRESS>'
+  owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+  name: 'USDC Token'
+  symbol: 'USDC'
+  decimals: 18
+test4:
+  type: synthetic
+  owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+  name: 'USDC Token'
+  symbol: 'USDC'
+  decimals: 18
+```
+
+> **Key point:** The `type: collateral` chain is where the original ERC20 lives and tokens get **locked**. The `type: synthetic` chain is where a wrapped version gets **minted**. You choose which chain holds the "real" token.
+
+### A3. Deploy the new EVM warp route
+
+```bash
+cd typescript/cli
+
+HYP_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+node dist/cli.js warp deploy \
+  --config configs/local-warp-route-usdc.yaml \
+  --registry .hyperlane \
+  --yes
+```
+
+This deploys a **separate** pair of warp contracts (HypERC20Collateral on evmtest2, HypERC20 on test4). The output shows the new warp addresses.
+
+The deployment artifact is saved to:
+`.hyperlane/deployments/warp_routes/USDC/local-warp-route-usdc-config.yaml`
+
+### A4. Enroll routers for the new warp route
+
+The existing `enroll-routers-simple.ts` reads from the RWA deployment config. For a new token you need to enroll routers on the new warp contracts. You can do this with `cast`:
+
+```bash
+# Get the new warp addresses from the deployment output
+NEW_WARP_EVMTEST2="<addressOrDenom for evmtest2>"
+NEW_WARP_TEST4="<addressOrDenom for test4>"
+
+# Enroll test4 router on evmtest2's new warp contract
+cast send $NEW_WARP_EVMTEST2 \
+  "enrollRemoteRouter(uint32,bytes32)" \
+  31337 \
+  $(cast --to-bytes32 $NEW_WARP_TEST4) \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8546
+
+# Enroll evmtest2 router on test4's new warp contract
+cast send $NEW_WARP_TEST4 \
+  "enrollRemoteRouter(uint32,bytes32)" \
+  31338 \
+  $(cast --to-bytes32 $NEW_WARP_EVMTEST2) \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8545
+```
+
+### A5. Test the new token bridge
+
+Mint tokens, approve, and call `transferRemote` on the new warp contract — the same flow as the existing RWA bridge but using the new token and warp addresses.
+
+```bash
+# Mint new tokens to the deployer
+cast send <NEW_TOKEN_ADDRESS> \
+  "mint(address,uint256)" \
+  0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+  $(cast --to-wei 1000) \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8546
+
+# Approve the new warp contract
+cast send <NEW_TOKEN_ADDRESS> \
+  "approve(address,uint256)" \
+  $NEW_WARP_EVMTEST2 \
+  $(cast --to-wei 100) \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8546
+
+# Bridge 1 token to test4
+cast send $NEW_WARP_EVMTEST2 \
+  "transferRemote(uint32,bytes32,uint256)" \
+  31337 \
+  $(cast --to-bytes32 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266) \
+  $(cast --to-wei 1) \
+  --value $(cast call $NEW_WARP_EVMTEST2 "quoteGasPayment(uint32)(uint256)" 31337 --rpc-url http://127.0.0.1:8546) \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8546
+```
+
+### A6. (Optional) Add Solana support for the new token
+
+To bridge the new token to Solana as well, repeat Steps 7.1–7.4 with a new warp route name:
+
+1. Create a new directory: `rust/sealevel/environments/local-e2e/warp-routes/usdc-local/`
+2. Add `token-config.json` with the new EVM warp address as `foreignDeployment`
+3. Generate keypairs in a `keys/` subdirectory
+4. Deploy with `--warp-route-name usdc-local --token-config-file <new config>`
+5. Configure ISM, fund ATA payer, enroll Solana router on the new EVM warp contract
+
+### Summary: What is shared vs per-token
+
+| Component            | Shared across all tokens        | Per token                  |
+| -------------------- | ------------------------------- | -------------------------- |
+| Mailbox              | ✅ One per chain                |                            |
+| MerkleTreeHook       | ✅ One per chain                |                            |
+| ValidatorAnnounce    | ✅ One per chain                |                            |
+| ISM                  | ✅ One per chain                |                            |
+| Validators & Relayer | ✅ Same agents relay all tokens |                            |
+| Warp Route contracts |                                 | ✅ One pair per token      |
+| Router enrollment    |                                 | ✅ Per warp route pair     |
+| ERC20 token contract |                                 | ✅ Per token               |
+| Solana warp program  |                                 | ✅ Per token               |
+| ATA Payer funding    |                                 | ✅ Per Solana warp program |
+
+> **No agent restart needed.** The relayer automatically picks up messages dispatched through the shared Mailbox, regardless of which warp route sent them.
+
+---
+
 ## Script Reference
 
 | Script                                | Purpose                                     |
