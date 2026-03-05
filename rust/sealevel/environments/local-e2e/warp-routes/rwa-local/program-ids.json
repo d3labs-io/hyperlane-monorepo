@@ -1,7 +1,7 @@
 {
-  "solalocal": {
-    "hex": "0xaa4f29fc4f1357f7dc61c43404446b69fef3e3c304517620a7c2870b74699883",
-    "base58": "CTpKf6FF4PYb1h9yvraHK74Lo77SVqdqxoKms2GsUg5g"
+  "sealeveltest1": {
+    "hex": "0x1ebb63ca61680dd5ae0fa342abafa78498d5777c28469b8a0094cc4a1092156e",
+    "base58": "34xxeWuYpnj5f7m5S57Sg7TD3pyD4gqooVepbJQVTmu7"
   },
   "evmtest2": {
     "hex": "0x0000000000000000000000004ed7c70f96b99c776995fb64377f0d4ab3b0e1c1",

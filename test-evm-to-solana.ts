@@ -21,7 +21,7 @@ async function testEvmToSolanaBridge() {
   const RWA_TOKEN = '0x68B1D87F95878fE05B998F19b66F4baba5De1aed';
   const WARP_EVMTEST2 = '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1';
   const SOLANA_DOMAIN = 13375;
-  const SOLANA_PROGRAM = 'CTpKf6FF4PYb1h9yvraHK74Lo77SVqdqxoKms2GsUg5g';
+  const SOLANA_PROGRAM = '34xxeWuYpnj5f7m5S57Sg7TD3pyD4gqooVepbJQVTmu7';
 
   console.log('📝 Configuration:');
   console.log(`  RWA Token: ${RWA_TOKEN}`);
@@ -76,7 +76,7 @@ async function testEvmToSolanaBridge() {
     console.log('🔍 Step 2: Verify Solana router enrollment');
     const solanaRouter = await warpContract.routers(SOLANA_DOMAIN);
     const expectedRouter =
-      '0xaa4f29fc4f1357f7dc61c43404446b69fef3e3c304517620a7c2870b74699883';
+      '0x1ebb63ca61680dd5ae0fa342abafa78498d5777c28469b8a0094cc4a1092156e';
 
     console.log(`  Current router: ${solanaRouter}`);
     console.log(`  Expected: ${expectedRouter}`);

@@ -10,11 +10,11 @@ async function enrollSolanaRouter() {
   console.log('🔧 Enrolling Solana Router on EVM\n');
 
   // Solana program ID from deployment
-  const SOLANA_PROGRAM = 'ExVvGNtKBiqdpoxkRNbNhJTzZ6P7JxcsMiPrxL6b4pgx';
+  const SOLANA_PROGRAM = '34xxeWuYpnj5f7m5S57Sg7TD3pyD4gqooVepbJQVTmu7';
   const SOLANA_DOMAIN = 13375; // solalocal domain
 
   // EVM warp contract address (evmtest2)
-  const WARP_EVMTEST2 = '0x59b670e9fA9D0A427751Af201D676719a970857b';
+  const WARP_EVMTEST2 = '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1';
 
   console.log('📝 Configuration:');
   console.log(`  EVM Warp (evmtest2): ${WARP_EVMTEST2}`);
@@ -38,7 +38,7 @@ async function enrollSolanaRouter() {
   try {
     // ExVvGNtKBiqdpoxkRNbNhJTzZ6P7JxcsMiPrxL6b4pgx = 0xcf5f92988fbfc3a3ad9fb9aa9646d8ab0129a9b3ff8a0e9132b85c065825d2a1
     const programBytes32 =
-      '0xcf5f92988fbfc3a3ad9fb9aa9646d8ab0129a9b3ff8a0e9132b85c065825d2a1';
+      '0x1ebb63ca61680dd5ae0fa342abafa78498d5777c28469b8a0094cc4a1092156e';
 
     console.log('🔑 Using Solana address:');
     console.log(`  Base58: ${SOLANA_PROGRAM}`);

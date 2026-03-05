@@ -29,30 +29,37 @@ Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 Address:     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 ```
 
-**Solana** -- Two addresses are needed. Here is how to get them:
+**Solana** -- Two addresses are needed:
 
-1. **Deployer keypair** -- stored as a JSON file at `~/.config/solana/local-deployer.json`. Get its public key:
+1. **Deployer** -- stored at `~/.config/solana/local-deployer.json`. Used to deploy Solana programs and pay for transactions.
+2. **Relayer payer** -- derived from the Anvil hex key. Used by the relayer agent to pay for Solana message delivery.
+
+Run this script to print both public keys (and create the deployer keypair if it doesn't exist):
 
 ```bash
+./test_scripts/solana-fund.sh
+```
+
+Or get them manually:
+
+```bash
+# Deployer pubkey
 solana-keygen pubkey ~/.config/solana/local-deployer.json
-```
 
-If this file does not exist yet, create it once:
-
-```bash
-solana-keygen new -o ~/.config/solana/local-deployer.json --no-bip39-passphrase
-solana config set --keypair ~/.config/solana/local-deployer.json
-solana config set --url http://127.0.0.1:8899
-```
-
-2. **Relayer Solana payer** -- derived from the default Anvil hex key. Get its public key:
-
-```bash
+# Relayer payer pubkey
 node -e "
 const { Keypair } = require('@solana/web3.js');
 const seed = Buffer.from('ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', 'hex');
 console.log(Keypair.fromSeed(seed).publicKey.toBase58());
 "
+```
+
+If the deployer keypair file does not exist yet, create it once:
+
+```bash
+solana-keygen new -o ~/.config/solana/local-deployer.json --no-bip39-passphrase
+solana config set --keypair ~/.config/solana/local-deployer.json
+solana config set --url http://127.0.0.1:8899
 ```
 
 Both addresses persist across restarts (the keypair files don't change), but their on-chain SOL balances are lost when you run `solana-test-validator --reset`.
@@ -135,7 +142,14 @@ anvil --port 8546 --chain-id 31338
 solana-test-validator --reset
 ```
 
-After the validator starts, fund both Solana accounts in a separate terminal (replace with your actual public keys from the Key Reference above):
+After the validator starts, fund both Solana accounts in a separate terminal:
+
+```bash
+# From repo root — prints both pubkeys, funds them, and shows balances
+./test_scripts/solana-fund.sh
+```
+
+Or fund manually (replace with your actual public keys from the Key Reference above):
 
 ```bash
 solana airdrop 100 <DEPLOYER_PUBKEY> --url http://127.0.0.1:8899
@@ -179,7 +193,20 @@ Record these addresses from the output (they appear in `.hyperlane/chains/<chain
 | `mailbox`                | Central hub for message dispatch/processing  |
 | `merkleTreeHook`         | Tracks dispatched messages in a merkle tree  |
 | `validatorAnnounce`      | Where validators register checkpoint storage |
-| `interchainGasPaymaster` | (protocolFee address from `requiredHook`)    |
+| `interchainGasPaymaster` | (protocolFee address -- see below)           |
+
+> **How to get `interchainGasPaymaster`:** This is the `protocolFee` contract (the `requiredHook`).
+> It is **NOT** printed in the CLI summary output or saved to `addresses.yaml`.
+> Query it from the deployed Mailbox using `cast`:
+>
+> ```bash
+> # For test4:
+> cast call <MAILBOX_ADDRESS> "requiredHook()(address)" --rpc-url http://127.0.0.1:8545
+> # For evmtest2:
+> cast call <MAILBOX_ADDRESS> "requiredHook()(address)" --rpc-url http://127.0.0.1:8546
+> ```
+>
+> On a fresh Anvil with the default deployer, this is typically `0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0`.
 
 **Files to modify after this step:**
 
@@ -187,7 +214,7 @@ Record these addresses from the output (they appear in `.hyperlane/chains/<chain
    - `mailbox` -- from deployment output
    - `merkleTreeHook` -- from deployment output (this must be the MerkleTreeHook, **not** the ProtocolFee hook)
    - `validatorAnnounce` -- from deployment output (this must be the ValidatorAnnounce contract, **not** the testRecipient)
-   - `interchainGasPaymaster` -- the protocolFee (requiredHook) address
+   - `interchainGasPaymaster` -- the protocolFee (requiredHook) address from the `cast call` command above
 
 ---
 
@@ -263,11 +290,31 @@ node dist/cli.js warp deploy \
   --yes
 ```
 
-Deployment config is automatically saved to `.hyperlane/deployments/warp_routes/RWA/local-evm-evm-warp-config.yaml`. Note the evmtest2 warp address from the output (e.g. `0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1`).
+Deployment config is automatically saved to `.hyperlane/deployments/warp_routes/RWA/local-warp-route-config.yaml` (named after the config file).
+
+> **How to find `EVMTEST2_WARP_ADDRESS`:** Look at the token summary at the end of the output.
+> Find the entry with `chainName: evmtest2` — its **`addressOrDenom`** is the warp address you need.
+>
+> ```
+> tokens:
+>   - chainName: evmtest2
+>     standard: EvmHypCollateral
+>     ...
+>     addressOrDenom: "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1"  <-- THIS IS IT
+>     collateralAddressOrDenom: "0x68B1D87F95878fE05B998F19b66F4baba5De1aed"  <-- this is the RWA token, NOT the warp address
+> ```
+>
+> You can also read it from the saved file:
+>
+> ```bash
+> cat typescript/cli/.hyperlane/deployments/warp_routes/RWA/local-warp-route-config.yaml
+> ```
+>
+> Look for `addressOrDenom` under `chainName: evmtest2`.
 
 **Files to modify after this step (only needed for Solana bridge):**
 
-1. **`rust/sealevel/environments/local-e2e/warp-routes/rwa-local/token-config.json`** -- set `evmtest2.foreignDeployment` to the evmtest2 warp address:
+1. **`rust/sealevel/environments/local-e2e/warp-routes/rwa-local/token-config.json`** -- set `evmtest2.foreignDeployment` to the **`addressOrDenom`** of evmtest2 from the output above:
 
 ```json
 {
@@ -532,6 +579,9 @@ Contracts need redeploying after an Anvil restart. Follow Steps 2-6 in order.
 **"No return data from InboxGetRecipientIsm instruction" / `InstructionError(2, InvalidArgument)`:**
 The Solana warp route was initialized with a different mailbox than what agents use. This happens when `solalocal/core/program-ids.json` was stale during warp route deployment. Fix: redeploy core with `--chain solalocal` (Step 3), regenerate warp keypairs and clear warp `program-ids.json`, then redeploy the warp route (Step 7).
 
+**"Transaction attempting to announce validator reverted" + `chain_signer: "5kMDk..."` (Solana validator):**
+This is **expected and non-blocking**. The Sealevel implementation does not support auto-announcing validator storage locations from within the agent (you'll see `WARN: Announcing validator storage locations within the agents is not supported on Sealevel` just above the error). Since `allowlocalcheckpointsyncers` is `true` in `agent-config.json`, the relayer reads checkpoints directly from the local filesystem — no on-chain announcement is needed. You can safely ignore this error.
+
 **"Validator has not announced any storage locations":**
 Run the ISM validator configuration commands from Step 7.2.
 
@@ -557,6 +607,7 @@ pkill -f relayer; pkill -f validator
 | `mint-tokens.ts`                      | Mint RWA tokens on evmtest2                 |
 | `test-bridge-auto.ts`                 | Test EVM-EVM bridge transfer                |
 | `test-evm-to-solana.ts`               | Test EVM-Solana bridge transfer             |
+| `test_scripts/solana-fund.sh`         | Print Solana pubkeys and fund them          |
 | `test_scripts/start-agents.sh`        | Start all validators and relayer            |
 | `test_scripts/stop-agents.sh`         | Stop all agents                             |
 | `test_scripts/quick-start.sh`         | Quick start when contracts already deployed |

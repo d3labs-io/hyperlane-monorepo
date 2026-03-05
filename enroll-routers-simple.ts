@@ -11,13 +11,13 @@ const MAILBOX_CLIENT_ABI = [
 async function simpleEnrollRouters() {
   console.log('🔧 Auto-Enrolling Remote Routers...\n');
 
-  // Read deployed warp route config (JSON parsing instead of YAML)
-  const configPath =
-    './typescript/cli/.hyperlane/deployments/warp_routes/RWA/local-evm-evm-warp-config.yaml';
+  // Read deployed warp route config
+  const configDir = './typescript/cli/.hyperlane/deployments/warp_routes/RWA';
+  const configPath = `${configDir}/local-warp-route-config.yaml`;
 
   if (!fs.existsSync(configPath)) {
     console.error(`❌ Config file not found: ${configPath}`);
-    console.error('Please deploy warp routes first!');
+    console.error('Please deploy warp routes first (Step 5).');
     process.exit(1);
   }
 
