@@ -21,7 +21,7 @@ async function testEvmToSolanaBridge() {
   const RWA_TOKEN = '0x68B1D87F95878fE05B998F19b66F4baba5De1aed';
   const WARP_EVMTEST2 = '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1';
   const SOLANA_DOMAIN = 13375;
-  const SOLANA_PROGRAM = '34xxeWuYpnj5f7m5S57Sg7TD3pyD4gqooVepbJQVTmu7';
+  const SOLANA_PROGRAM = 'BicFxrnvuuJKuAM4eC8Z8vdJ7kc6JEJwMX5A651FaeRw';
 
   console.log('📝 Configuration:');
   console.log(`  RWA Token: ${RWA_TOKEN}`);
@@ -76,7 +76,7 @@ async function testEvmToSolanaBridge() {
     console.log('🔍 Step 2: Verify Solana router enrollment');
     const solanaRouter = await warpContract.routers(SOLANA_DOMAIN);
     const expectedRouter =
-      '0x1ebb63ca61680dd5ae0fa342abafa78498d5777c28469b8a0094cc4a1092156e';
+      '0x9f3d8c7be2197b7440873223bf9f3932bbe2710cd83ed71c671f925d7f6b3862';
 
     console.log(`  Current router: ${solanaRouter}`);
     console.log(`  Expected: ${expectedRouter}`);
@@ -92,6 +92,9 @@ async function testEvmToSolanaBridge() {
     // Step 3: Approve warp contract
     console.log('📝 Step 3: Approve warp contract');
     const amountToTransfer = ethers.utils.parseEther('1');
+    console.log(`  Amount to transfer: ${amountToTransfer}`);
+    console.log(`  EVM Wallet: ${evmWallet.address}`);
+    console.log(`  WARP EVMTEST2: ${WARP_EVMTEST2}`);
     const allowance = await rwaToken.allowance(
       evmWallet.address,
       WARP_EVMTEST2,

@@ -12,7 +12,7 @@ async function mintTokens() {
 
   // Read RWA token address from config
   const configPath =
-    './typescript/cli/.hyperlane/deployments/warp_routes/RWA/local-warp-route-config.yaml';
+    './typescript/cli/.hyperlane/deployments/warp_routes/Wade/local-warp-route-config.yaml';
 
   if (!fs.existsSync(configPath)) {
     console.error(`❌ Config file not found: ${configPath}`);
