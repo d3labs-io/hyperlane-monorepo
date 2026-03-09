@@ -1,0 +1,1106 @@
+# Pruv Testnet → Solana Testnet Bridge Guide
+
+Complete guide to deploy and operate the Hyperlane bridge between **pruvtest** (EVM) and **Solana Testnet**, covering three tokens: PRUV native, USDC, and a custom ERC20.
+
+---
+
+## Table of Contents
+
+1. [Overview and Architecture](#1-overview-and-architecture)
+2. [Prerequisites](#2-prerequisites)
+3. [Fee Estimation](#3-fee-estimation)
+4. [Wallet Setup](#4-wallet-setup)
+5. [Option A — Use Official Hyperlane Core (Recommended)](#5-option-a--use-official-hyperlane-core-recommended)
+6. [Option B — Deploy Own Hyperlane Core on Solana Testnet](#6-option-b--deploy-own-hyperlane-core-on-solana-testnet)
+7. [Deploy EVM Warp Routes on pruvtest](#7-deploy-evm-warp-routes-on-pruvtest)
+8. [Deploy Solana Warp Routes](#8-deploy-solana-warp-routes)
+9. [Configure ISM and Enroll Routers](#9-configure-ism-and-enroll-routers)
+10. [Configure and Start Agents](#10-configure-and-start-agents)
+11. [Test the Bridge](#11-test-the-bridge)
+12. [Adding More Tokens to the Bridge](#12-adding-more-tokens-to-the-bridge)
+13. [Troubleshooting](#13-troubleshooting)
+
+---
+
+## 1. Overview and Architecture
+
+```
+pruvtest (EVM, domain 7336)          Solana Testnet (domain 1399811151)
+────────────────────────────         ──────────────────────────────────
+Mailbox (existing)                   Mailbox (official or own)
+ └─ HypNative          ──dispatch──▶  └─ warp/token_native (synthetic PRUV)
+ └─ HypERC20Collateral ──dispatch──▶  └─ warp/token_collateral (synthetic USDC)
+ └─ HypERC20Collateral ──dispatch──▶  └─ warp/token_collateral (synthetic ERC20)
+                                            │
+                Validator signs checkpoint  │  Relayer delivers message
+                ◀─────────────────────────────────────────────────────
+```
+
+**What is already deployed on pruvtest:**
+
+| Contract               | Address                                      |
+| ---------------------- | -------------------------------------------- |
+| Mailbox                | `0x72364A5F747a4e6E17b13Be4b421b879E95D95E7` |
+| MerkleTreeHook         | `0xA08C7fc82aD1565Ea1b7eEB24618c4B24c2733EC` |
+| InterchainGasPaymaster | `0x4D73607C4462cc0D3B2Ab93a7521CEfDB10f1EC5` |
+| ValidatorAnnounce      | `0x3B25B046bf50E3D469bbF2610bf564f11a4dC8c2` |
+| ProxyAdmin             | `0x823B2406490752fB50e1CABa809Bf643CD233553` |
+
+**Official Hyperlane core on Solana Testnet (Option A):**
+
+| Program              | Address                                        |
+| -------------------- | ---------------------------------------------- |
+| Mailbox              | `75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR` |
+| ValidatorAnnounce    | `8qNYSi9EP1xSnRjtMpyof88A26GBbdcrsa61uSaHiwx3` |
+| MultisigIsmMessageId | `4GHxwWyKB9exhKG4fdyU2hfLgfFzhHp2WcsSKc2uNR1k` |
+| IGP Program          | `5p7Hii6CJL4xGBYYTGEQmH9LnUSZteFJUu9AVLDExZX2` |
+| Overhead IGP Account | `hBHAApi5ZoeCYHqDdCKkCzVKmBdwywdT3hMqe327eZB`  |
+| IGP Account          | `9SQVtTNsbipdMzumhzi6X8GwojiSMwBfqAhS7FgyTcqy` |
+
+> **Option A vs Option B**: Use Option A unless you need custom ISM logic or full program ownership. With Option A, pruvtest domain (7336) does not exist in the official Solana ISM — you still need to configure it and run your own validator+relayer. Option B gives full control but requires ~4 extra SOL for program rent.
+
+---
+
+## 2. Prerequisites
+
+### Software
+
+| Tool                          | Version | Install                                              |
+| ----------------------------- | ------- | ---------------------------------------------------- |
+| Node.js                       | ≥ 18    | `nvm install 18`                                     |
+| Yarn                          | 4.x     | `npm install -g yarn`                                |
+| Solana CLI                    | 1.14.20 | `./rust/sealevel/programs/install-solana-1.14.20.sh` |
+| Rust / Cargo                  | stable  | `rustup install stable`                              |
+| Hyperlane CLI (built locally) | —       | `yarn --cwd typescript/cli build`                    |
+| ts-node                       | —       | included via `tsx` in root `package.json`            |
+
+### Build Hyperlane Solana Programs (Option B only)
+
+```bash
+cd rust/sealevel/programs
+./build-programs.sh all
+# Outputs .so files to rust/sealevel/target/deploy/
+```
+
+### Build Hyperlane Agents
+
+```bash
+cd rust/main
+cargo build --bin validator --bin relayer
+```
+
+### Verify `cast` is available
+
+```bash
+cast --version
+# If missing: https://book.getfoundry.sh/getting-started/installation
+```
+
+---
+
+## 3. Fee Estimation
+
+Before funding wallets, run the fee estimation script to get current costs:
+
+```bash
+npx ts-node scripts/estimate-testnet-fees.ts
+```
+
+The script queries live gas prices from pruvtest and rent costs from Solana Testnet and prints a detailed breakdown.
+
+**Typical costs (estimates — run the script for current values):**
+
+### Solana Testnet SOL Requirements
+
+| Step                                    | Option A (SOL) | Option B (SOL) |
+| --------------------------------------- | -------------- | -------------- |
+| Core programs (mailbox, IGP, ISM, VA)   | 0 (official)   | ~4.0–5.0       |
+| Warp route — PRUV native (token_native) | ~0.5–0.7       | ~0.5–0.7       |
+| Warp route — USDC (synthetic)           | ~0.5–0.7       | ~0.5–0.7       |
+| Warp route — Custom ERC20 (collateral)  | ~0.6–0.8       | ~0.6–0.8       |
+| ATA payer funding (per warp route)      | 0.5 each       | 0.5 each       |
+| Transaction fees (buffer)               | 0.1            | 0.5            |
+| **Total (3 tokens + buffer)**           | **~3.0 SOL**   | **~8.0 SOL**   |
+
+> SOL can be obtained free from Solana Testnet faucet. See Section 4.
+
+### pruvtest PRUV Requirements
+
+| Step                                    | Gas (approx.)   | PRUV cost (1 Gwei) |
+| --------------------------------------- | --------------- | ------------------ |
+| Deploy HypNative (PRUV warp)            | ~3,500,000      | ~0.0035 PRUV       |
+| Deploy HypERC20Collateral × 2           | ~7,600,000      | ~0.0076 PRUV       |
+| Deploy ERC20 tokens × 2 (USDC + custom) | ~2,400,000      | ~0.0024 PRUV       |
+| enrollRemoteRouter × 3                  | ~240,000        | ~0.00024 PRUV      |
+| ISM config × 3                          | ~360,000        | ~0.00036 PRUV      |
+| **Total (3 tokens)**                    | **~14,100,000** | **~0.015 PRUV**    |
+
+> Gas costs on pruvtest are very low. With 1 Gwei gas price the entire deployment costs less than 0.1 PRUV. Run `estimate-testnet-fees.ts` for the live gas price.
+
+**Recommended wallet funding before starting:**
+
+| Wallet                     | Minimum  | Recommended |
+| -------------------------- | -------- | ----------- |
+| Solana deployer (Option A) | 3.0 SOL  | 4.0 SOL     |
+| Solana deployer (Option B) | 8.0 SOL  | 10.0 SOL    |
+| Solana relayer payer       | 0.5 SOL  | 1.0 SOL     |
+| pruvtest deployer/signer   | 0.1 PRUV | 1.0 PRUV    |
+
+---
+
+## 4. Wallet Setup
+
+### 4.1 Create Solana Testnet Keypairs
+
+You need two Solana wallets:
+
+1. **Deployer** — deploys programs and creates accounts
+2. **Relayer payer** — pays for Solana transactions when the relayer delivers messages
+
+```bash
+# Deployer keypair (reusable across sessions)
+solana-keygen new -o ~/.config/solana/pruv-bridge-deployer.json --no-bip39-passphrase
+solana config set --keypair ~/.config/solana/pruv-bridge-deployer.json
+solana config set --url https://api.testnet.solana.com
+
+# Print deployer public key
+solana address
+# Example: 7eHMrPaVnbp1UMfBrPLmZ1VZqYasFjJGajf9pDAVhVvt
+
+# Relayer payer — derive from your EVM private key (same pattern as local setup)
+node -e "
+const { Keypair } = require('@solana/web3.js');
+const evmKey = '<YOUR_EVM_PRIVATE_KEY_NO_0x_PREFIX>';
+const seed = Buffer.from(evmKey, 'hex');
+const kp = Keypair.fromSeed(seed.slice(0, 32));
+console.log('Relayer payer pubkey:', kp.publicKey.toBase58());
+"
+```
+
+### 4.2 Fund Solana Wallets via Testnet Airdrop
+
+Solana Testnet has a rate limit of ~2 SOL per request. Request multiple times as needed.
+
+```bash
+# Fund deployer (run 2–5 times as needed for Option B)
+solana airdrop 2 $(solana address) --url https://api.testnet.solana.com
+sleep 30  # Wait between requests to avoid rate limiting
+solana airdrop 2 $(solana address) --url https://api.testnet.solana.com
+
+# Fund relayer payer
+RELAYER_PAYER_PUBKEY=$(node -e "
+const { Keypair } = require('@solana/web3.js');
+const seed = Buffer.from('<YOUR_EVM_PRIVATE_KEY_NO_0x>', 'hex');
+console.log(Keypair.fromSeed(seed.slice(0, 32)).publicKey.toBase58());
+")
+solana airdrop 1 $RELAYER_PAYER_PUBKEY --url https://api.testnet.solana.com
+
+# Check balances
+solana balance --url https://api.testnet.solana.com
+solana balance $RELAYER_PAYER_PUBKEY --url https://api.testnet.solana.com
+```
+
+**Fee for this step**: Free (Solana testnet airdrop)
+
+### 4.3 Verify pruvtest Wallet Balance
+
+```bash
+cast balance <YOUR_EVM_ADDRESS> --rpc-url https://rpc.testnet.pruv.network | xargs -I{} cast --from-wei {}
+```
+
+If your balance is low, request PRUV from the pruvtest faucet or transfer from another wallet.
+
+---
+
+## 5. Option A — Use Official Hyperlane Core (Recommended)
+
+In this option, you use the official Hyperlane programs already deployed on Solana Testnet. You skip deploying core programs and only deploy warp route programs.
+
+**Proceed directly to [Step 7: Deploy EVM Warp Routes](#7-deploy-evm-warp-routes-on-pruvtest).**
+
+Note the following when filling in `agent-config-testnet.json` (Section 10):
+
+```
+mailbox              = 75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR
+validator_announce   = 8qNYSi9EP1xSnRjtMpyof88A26GBbdcrsa61uSaHiwx3
+multisig_ism         = 4GHxwWyKB9exhKG4fdyU2hfLgfFzhHp2WcsSKc2uNR1k
+igp_program_id       = 5p7Hii6CJL4xGBYYTGEQmH9LnUSZteFJUu9AVLDExZX2
+overhead_igp_account = hBHAApi5ZoeCYHqDdCKkCzVKmBdwywdT3hMqe327eZB
+```
+
+For Section 9 (ISM configuration), when you run `multisig-ism-message-id set-validators-and-threshold`, use the official multisig ISM program ID above with your pruvtest domain (7336) and your validator address.
+
+**Fee for Option A Solana setup**: $0 (no programs to deploy in this step)
+
+---
+
+## 6. Option B — Deploy Own Hyperlane Core on Solana Testnet
+
+Follow this section only if you need full control over the Solana core programs.
+
+### 6.1 Prepare Environment Directory
+
+The environment is already created at `rust/sealevel/environments/testnet/`. No changes needed.
+
+### 6.2 Build Programs (if not already built)
+
+```bash
+cd rust/sealevel/programs
+./build-programs.sh all
+# Check outputs
+ls ../target/deploy/*.so
+```
+
+### 6.3 Deploy Core Programs
+
+```bash
+cd rust/sealevel
+
+DEPLOYER_KEYPAIR=~/.config/solana/pruv-bridge-deployer.json
+SOLANA_RPC=https://api.testnet.solana.com
+
+./target/debug/hyperlane-sealevel-client core deploy \
+  --url $SOLANA_RPC \
+  --keypair $DEPLOYER_KEYPAIR \
+  --local-domain 1399811151 \
+  --environment testnet \
+  --environments-dir ./environments \
+  --built-so-dir ./target/deploy \
+  --chain solanatestnet
+```
+
+> **Note**: This deploys mailbox, IGP, validator_announce, and multisig_ism programs. It writes program IDs to `environments/testnet/solanatestnet/core/program-ids.json`.
+
+**Estimated fee**: ~4.0–5.0 SOL (program rent) + ~0.5 SOL (transaction fees)
+
+### 6.4 Record Core Program IDs
+
+After deployment, the program IDs are written to `rust/sealevel/environments/testnet/solanatestnet/core/program-ids.json`. Verify:
+
+```bash
+cat rust/sealevel/environments/testnet/solanatestnet/core/program-ids.json
+```
+
+Example output:
+
+```json
+{
+  "mailbox": "NEW_MAILBOX_PROGRAM_ID",
+  "validator_announce": "NEW_VA_PROGRAM_ID",
+  "multisig_ism_message_id": "NEW_ISM_PROGRAM_ID",
+  "igp_program_id": "NEW_IGP_PROGRAM_ID",
+  "overhead_igp_account": "NEW_IGP_OVERHEAD_ACCOUNT",
+  "igp_account": "NEW_IGP_ACCOUNT"
+}
+```
+
+Update `agent-config-testnet.json` with these values (see Section 10).
+
+---
+
+## 7. Deploy EVM Warp Routes on pruvtest
+
+This deploys the EVM side of the bridge for each token. The pruvtest Mailbox is already deployed — you only need warp route contracts.
+
+### 7.1 Deploy ERC20 Tokens (for USDC and Custom ERC20 only)
+
+> Skip this for PRUV native (it uses the native token, no ERC20 to deploy).
+
+```bash
+cd external_contracts/deployment-asset-script
+
+# Deploy USDC token
+TOKEN_NAME="USDC" TOKEN_SYMBOL="USDC" \
+PRIVATE_KEY=<YOUR_PRIVATE_KEY> \
+npx hardhat run scripts/deploy.ts --network pruvTestnet
+# Save: USDC_TOKEN_ADDRESS=<printed address>
+
+# Deploy custom ERC20 token
+TOKEN_NAME="<YOUR_TOKEN_NAME>" TOKEN_SYMBOL="<YOUR_SYMBOL>" \
+PRIVATE_KEY=<YOUR_PRIVATE_KEY> \
+npx hardhat run scripts/deploy.ts --network pruvTestnet
+# Save: CUSTOM_TOKEN_ADDRESS=<printed address>
+```
+
+**Estimated fee per ERC20 deployment**: ~0.0012 PRUV at 1 Gwei
+
+### 7.2 Update Warp Route Config Files
+
+**For USDC** — edit `typescript/cli/configs/testnet-warp-usdc.yaml`:
+
+- Replace `REPLACE_WITH_USDC_ERC20_ADDRESS_ON_PRUVTEST` with your USDC token address
+- Replace `REPLACE_WITH_YOUR_EVM_ADDRESS` with your deployer address
+
+**For custom ERC20** — edit `typescript/cli/configs/testnet-warp-custom-erc20.yaml`:
+
+- Replace token address, name, symbol, and owner address
+
+**For PRUV native** — edit `typescript/cli/configs/testnet-warp-pruv-native.yaml`:
+
+- Replace `REPLACE_WITH_YOUR_EVM_ADDRESS` with your deployer address
+
+### 7.3 Deploy EVM Warp Contracts
+
+```bash
+cd typescript/cli
+
+# Deploy PRUV native warp route
+HYP_KEY=<YOUR_PRIVATE_KEY> \
+node dist/cli.js warp deploy \
+  --config configs/testnet-warp-pruv-native.yaml \
+  --registry .hyperlane \
+  --yes
+
+# Deploy USDC warp route
+HYP_KEY=<YOUR_PRIVATE_KEY> \
+node dist/cli.js warp deploy \
+  --config configs/testnet-warp-usdc.yaml \
+  --registry .hyperlane \
+  --yes
+
+# Deploy custom ERC20 warp route
+HYP_KEY=<YOUR_PRIVATE_KEY> \
+node dist/cli.js warp deploy \
+  --config configs/testnet-warp-custom-erc20.yaml \
+  --registry .hyperlane \
+  --yes
+```
+
+**Estimated fee per warp contract deployment**: ~0.003–0.004 PRUV at 1 Gwei
+
+### 7.4 Record EVM Warp Addresses
+
+Warp route deployments are saved to `.hyperlane/deployments/warp_routes/<SYMBOL>/`. Find the `addressOrDenom` for `chainName: pruvtest`:
+
+```bash
+# PRUV warp address
+cat typescript/cli/.hyperlane/deployments/warp_routes/PRUV/testnet-warp-pruv-native-config.yaml | grep -A5 "pruvtest"
+
+# USDC warp address
+cat typescript/cli/.hyperlane/deployments/warp_routes/USDC/testnet-warp-usdc-config.yaml | grep -A5 "pruvtest"
+
+# Custom ERC20 warp address
+cat typescript/cli/.hyperlane/deployments/warp_routes/<SYMBOL>/testnet-warp-custom-erc20-config.yaml | grep -A5 "pruvtest"
+```
+
+Save these as:
+
+```
+PRUV_WARP_EVM_ADDRESS=0x...
+USDC_WARP_EVM_ADDRESS=0x...
+CUSTOM_WARP_EVM_ADDRESS=0x...
+```
+
+---
+
+## 8. Deploy Solana Warp Routes
+
+### 8.1 Generate Warp Route Keypairs
+
+Each token gets its own Solana warp program with a unique keypair. Generate keypairs for each:
+
+```bash
+# PRUV native warp
+cd rust/sealevel/environments/testnet/warp-routes/pruv-native-solana/keys
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-keypair.json --no-bip39-passphrase
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-buffer.json --no-bip39-passphrase
+cd -
+
+# USDC warp
+cd rust/sealevel/environments/testnet/warp-routes/usdc-pruv-solana/keys
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-keypair.json --no-bip39-passphrase
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-buffer.json --no-bip39-passphrase
+cd -
+
+# Custom ERC20 warp
+cd rust/sealevel/environments/testnet/warp-routes/custom-erc20-solana/keys
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-keypair.json --no-bip39-passphrase
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-buffer.json --no-bip39-passphrase
+cd -
+```
+
+### 8.2 Update Token Config Files
+
+For each warp route, update the `foreignDeployment` in the token-config.json with the EVM warp address from Section 7.4:
+
+```bash
+# PRUV
+sed -i '' 's/REPLACE_WITH_PRUV_WARP_EVM_ADDRESS/<PRUV_WARP_EVM_ADDRESS>/' \
+  rust/sealevel/environments/testnet/warp-routes/pruv-native-solana/token-config.json
+
+# USDC
+sed -i '' 's/REPLACE_WITH_USDC_WARP_EVM_ADDRESS/<USDC_WARP_EVM_ADDRESS>/' \
+  rust/sealevel/environments/testnet/warp-routes/usdc-pruv-solana/token-config.json
+
+# Custom ERC20 (also update name and symbol)
+# Edit manually: rust/sealevel/environments/testnet/warp-routes/custom-erc20-solana/token-config.json
+```
+
+### 8.3 Set Solana CLI to Testnet
+
+```bash
+solana config set --url https://api.testnet.solana.com
+solana config set --keypair ~/.config/solana/pruv-bridge-deployer.json
+```
+
+### 8.4 Deploy PRUV Native Warp Route
+
+```bash
+cd rust/sealevel
+
+yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+  --environment testnet \
+  --environments-dir ./environments \
+  --built-so-dir ./target/deploy \
+  --warp-route-name pruv-native-solana \
+  --token-config-file ./environments/testnet/warp-routes/pruv-native-solana/token-config.json \
+  --registry .hyperlane \
+  --url https://api.testnet.solana.com
+```
+
+Note the output:
+
+- **Solana Program ID (base58)** — needed for router enrollment
+- **Program ID (hex)** — needed for `enrollRemoteRouter` on EVM
+
+**Estimated fee**: ~0.5–0.7 SOL
+
+### 8.5 Deploy USDC Warp Route
+
+```bash
+yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+  --environment testnet \
+  --environments-dir ./environments \
+  --built-so-dir ./target/deploy \
+  --warp-route-name usdc-pruv-solana \
+  --token-config-file ./environments/testnet/warp-routes/usdc-pruv-solana/token-config.json \
+  --registry .hyperlane \
+  --url https://api.testnet.solana.com
+```
+
+**Estimated fee**: ~0.5–0.7 SOL
+
+### 8.6 Deploy Custom ERC20 Warp Route
+
+```bash
+yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+  --environment testnet \
+  --environments-dir ./environments \
+  --built-so-dir ./target/deploy \
+  --warp-route-name custom-erc20-solana \
+  --token-config-file ./environments/testnet/warp-routes/custom-erc20-solana/token-config.json \
+  --registry .hyperlane \
+  --url https://api.testnet.solana.com
+```
+
+**Estimated fee**: ~0.6–0.8 SOL
+
+### 8.7 Convert Program IDs to Hex
+
+For each deployed Solana warp program, get the hex representation needed for EVM router enrollment:
+
+```bash
+node -e "
+const { PublicKey } = require('@solana/web3.js');
+const programs = {
+  'PRUV': '<PRUV_SOLANA_PROGRAM_ID_BASE58>',
+  'USDC': '<USDC_SOLANA_PROGRAM_ID_BASE58>',
+  'Custom': '<CUSTOM_SOLANA_PROGRAM_ID_BASE58>',
+};
+for (const [name, id] of Object.entries(programs)) {
+  const hex = '0x' + Buffer.from(new PublicKey(id).toBytes()).toString('hex');
+  console.log(name + ':', hex);
+}
+"
+```
+
+Save these as:
+
+```
+PRUV_SOLANA_PROGRAM_BASE58=<...>
+PRUV_SOLANA_PROGRAM_HEX=0x<...>
+
+USDC_SOLANA_PROGRAM_BASE58=<...>
+USDC_SOLANA_PROGRAM_HEX=0x<...>
+
+CUSTOM_SOLANA_PROGRAM_BASE58=<...>
+CUSTOM_SOLANA_PROGRAM_HEX=0x<...>
+```
+
+---
+
+## 9. Configure ISM and Enroll Routers
+
+### 9.1 Set pruvtest Validators in Solana Multisig ISM
+
+The Solana side must know which EVM address (your validator) is authorized to sign checkpoints for pruvtest (domain 7336).
+
+**For Option A** (official Hyperlane ISM, program ID `4GHxwWyKB9exhKG4fdyU2hfLgfFzhHp2WcsSKc2uNR1k`):
+
+```bash
+cd rust/sealevel
+
+./target/debug/hyperlane-sealevel-client multisig-ism-message-id set-validators-and-threshold \
+  --program-id 4GHxwWyKB9exhKG4fdyU2hfLgfFzhHp2WcsSKc2uNR1k \
+  --domain 7336 \
+  --validators <YOUR_VALIDATOR_EVM_ADDRESS> \
+  --threshold 1 \
+  --url https://api.testnet.solana.com \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json
+```
+
+**For Option B** (use your deployed ISM program ID from `program-ids.json`):
+
+```bash
+MULTISIG_ISM=$(cat rust/sealevel/environments/testnet/solanatestnet/core/program-ids.json | \
+  python3 -c "import json,sys; print(json.load(sys.stdin)['multisig_ism_message_id'])")
+
+./target/debug/hyperlane-sealevel-client multisig-ism-message-id set-validators-and-threshold \
+  --program-id $MULTISIG_ISM \
+  --domain 7336 \
+  --validators <YOUR_VALIDATOR_EVM_ADDRESS> \
+  --threshold 1 \
+  --url https://api.testnet.solana.com \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json
+```
+
+> **What is your validator EVM address?** It is the EVM address derived from the private key you use in `agent-config-testnet.json` (`defaultsigner.key`). Get it with:
+>
+> ```bash
+> cast wallet address --private-key <YOUR_PRIVATE_KEY>
+> ```
+
+**Estimated fee**: ~0.001 SOL (transaction fees)
+
+### 9.2 Fund ATA Payer PDAs
+
+Each Solana warp program has an ATA payer PDA that pays for creating recipient token accounts. Fund each with at least 0.1 SOL (0.5 SOL recommended).
+
+```bash
+for PROGRAM_ID in <PRUV_SOLANA_PROGRAM_BASE58> <USDC_SOLANA_PROGRAM_BASE58> <CUSTOM_SOLANA_PROGRAM_BASE58>; do
+  ATA_PAYER=$(node -e "
+  const { PublicKey } = require('@solana/web3.js');
+  const programId = new PublicKey('$PROGRAM_ID');
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('hyperlane_token'), Buffer.from('-'), Buffer.from('ata_payer')],
+    programId
+  );
+  console.log(pda.toBase58());
+  ")
+  echo "Program: $PROGRAM_ID"
+  echo "ATA Payer PDA: $ATA_PAYER"
+  solana transfer $ATA_PAYER 0.5 \
+    --url https://api.testnet.solana.com \
+    --keypair ~/.config/solana/pruv-bridge-deployer.json \
+    --allow-unfunded-recipient
+  echo ""
+done
+```
+
+**Estimated fee**: 0.5 SOL per warp route × 3 = 1.5 SOL total
+
+### 9.3 Enroll Solana Routers on EVM Warp Contracts
+
+Update the enrollment script with your addresses and run it:
+
+```bash
+PRIVATE_KEY=<YOUR_EVM_PRIVATE_KEY> \
+PRUV_WARP_ADDRESS=<PRUV_WARP_EVM_ADDRESS> \
+PRUV_SOLANA_HEX=<PRUV_SOLANA_PROGRAM_HEX> \
+USDC_WARP_ADDRESS=<USDC_WARP_EVM_ADDRESS> \
+USDC_SOLANA_HEX=<USDC_SOLANA_PROGRAM_HEX> \
+CUSTOM_WARP_ADDRESS=<CUSTOM_WARP_EVM_ADDRESS> \
+CUSTOM_SOLANA_HEX=<CUSTOM_SOLANA_PROGRAM_HEX> \
+npx ts-node scripts/enroll-solana-testnet.ts
+```
+
+Or enroll manually via `cast` (one command per token):
+
+```bash
+# PRUV
+cast send <PRUV_WARP_EVM_ADDRESS> \
+  "enrollRemoteRouter(uint32,bytes32)" \
+  1399811151 \
+  <PRUV_SOLANA_PROGRAM_HEX> \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+
+# USDC
+cast send <USDC_WARP_EVM_ADDRESS> \
+  "enrollRemoteRouter(uint32,bytes32)" \
+  1399811151 \
+  <USDC_SOLANA_PROGRAM_HEX> \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+
+# Custom ERC20
+cast send <CUSTOM_WARP_EVM_ADDRESS> \
+  "enrollRemoteRouter(uint32,bytes32)" \
+  1399811151 \
+  <CUSTOM_SOLANA_PROGRAM_HEX> \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+```
+
+**Estimated fee**: ~0.00008 PRUV per call × 3 = ~0.00024 PRUV
+
+### 9.4 Verify Router Enrollment
+
+```bash
+# Check each warp contract has the Solana router enrolled
+for WARP in <PRUV_WARP_EVM_ADDRESS> <USDC_WARP_EVM_ADDRESS> <CUSTOM_WARP_EVM_ADDRESS>; do
+  echo "Warp: $WARP"
+  cast call $WARP "routers(uint32)(bytes32)" 1399811151 \
+    --rpc-url https://rpc.testnet.pruv.network
+  echo ""
+done
+```
+
+---
+
+## 10. Configure and Start Agents
+
+### 10.1 Update agent-config-testnet.json
+
+Edit `agent-config-testnet.json` in the repo root. Replace all `REPLACE_*` placeholders:
+
+| Placeholder                                         | Value                                                                                        |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID`            | Option A: `75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR` / Option B: from `program-ids.json` |
+| `REPLACE_WITH_SOLANA_IGP_PROGRAM_ID`                | Option A: `5p7Hii6CJL4xGBYYTGEQmH9LnUSZteFJUu9AVLDExZX2` / Option B: from `program-ids.json` |
+| `REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID` | Option A: `8qNYSi9EP1xSnRjtMpyof88A26GBbdcrsa61uSaHiwb3` / Option B: from `program-ids.json` |
+| `REPLACE_WITH_RELAYER_SOL_PUBKEY`                   | Relayer payer Solana pubkey (from Section 4.1)                                               |
+| `REPLACE_WITH_YOUR_PRIVATE_KEY`                     | Your EVM private key (0x-prefixed)                                                           |
+
+### 10.2 Configure Checkpoint Storage
+
+For testnet, you can use local filesystem checkpoints. Create a directory:
+
+```bash
+mkdir -p /tmp/hyperlane-pruv-checkpoints/pruvtest
+mkdir -p /tmp/hyperlane-pruv-checkpoints/solanatestnet
+```
+
+### 10.3 Start Validator (pruvtest)
+
+The validator watches the pruvtest Mailbox and signs checkpoints that the Solana ISM needs to verify messages.
+
+```bash
+cd rust/main
+
+# Validator for pruvtest
+HYP_ORIGINCHAINNAME="pruvtest" \
+HYP_VALIDATOR_KEY="<YOUR_PRIVATE_KEY>" \
+HYP_CHECKPOINTSYNCER_TYPE="localStorage" \
+HYP_CHECKPOINTSYNCER_PATH="/tmp/hyperlane-pruv-checkpoints/pruvtest" \
+HYP_DB="/tmp/hyperlane-pruv-db/validator-pruvtest" \
+HYP_TRACING_LEVEL="info" \
+HYP_METRICSPORT="9091" \
+CONFIG_FILES="<REPO_ROOT>/agent-config-testnet.json" \
+./target/debug/validator
+```
+
+Wait for the validator to announce its storage location. You should see in logs:
+
+```
+INFO Validator has announced storage location
+```
+
+### 10.4 Start Relayer
+
+The relayer watches both chains, fetches validator signatures, and delivers messages.
+
+```bash
+cd rust/main
+
+HYP_RELAYCHAINS="pruvtest,solanatestnet" \
+HYP_DB="/tmp/hyperlane-pruv-db/relayer" \
+HYP_TRACING_LEVEL="info" \
+HYP_METRICSPORT="9090" \
+HYP_ALLOWLOCALCHECKPOINTSYNCERS="true" \
+HYP_DEFAULTSIGNER_KEY="<YOUR_PRIVATE_KEY>" \
+HYP_GASPAYMENTENFORCEMENT='[{"type":"none"}]' \
+CONFIG_FILES="<REPO_ROOT>/agent-config-testnet.json" \
+./target/debug/relayer
+```
+
+> **Note on `allowlocalcheckpointsyncers`**: Set to `true` for testnet with local filesystem checkpoints. For production, use S3 or GCS storage and set this to `false`.
+
+### 10.5 Verify Agents Are Running
+
+```bash
+# Check validator metrics
+curl -s http://localhost:9091/metrics | grep hyperlane_latest_checkpoint
+
+# Check relayer metrics
+curl -s http://localhost:9090/metrics | grep hyperlane_messages_processed
+```
+
+---
+
+## 11. Test the Bridge
+
+### 11.1 Obtain Test Tokens
+
+```bash
+# For USDC and custom ERC20, mint tokens to yourself (if you're the token owner)
+cast send <USDC_TOKEN_ADDRESS> \
+  "mint(address,uint256)" \
+  <YOUR_EVM_ADDRESS> \
+  $(cast --to-wei 1000) \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+
+cast send <CUSTOM_TOKEN_ADDRESS> \
+  "mint(address,uint256)" \
+  <YOUR_EVM_ADDRESS> \
+  $(cast --to-wei 1000) \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+```
+
+### 11.2 Run Bridge Tests
+
+```bash
+PRIVATE_KEY=<YOUR_PRIVATE_KEY> \
+RECIPIENT_SOLANA_PUBKEY=<YOUR_SOLANA_PUBKEY> \
+PRUV_WARP_ADDRESS=<PRUV_WARP_EVM_ADDRESS> \
+USDC_WARP_ADDRESS=<USDC_WARP_EVM_ADDRESS> \
+USDC_ERC20_ADDRESS=<USDC_TOKEN_ADDRESS> \
+CUSTOM_WARP_ADDRESS=<CUSTOM_WARP_EVM_ADDRESS> \
+CUSTOM_ERC20_ADDRESS=<CUSTOM_TOKEN_ADDRESS> \
+npx ts-node scripts/test-pruv-to-solana.ts
+```
+
+### 11.3 Verify Bridge Delivery
+
+**Method A — Relayer logs (fastest)**
+
+Watch the relayer terminal for:
+
+```
+Delivering message ... to solanatestnet
+Message delivered on solanatestnet
+```
+
+If you see `Repreparing message` or `Unable to reach quorum`, the relayer is still retrying.
+
+**Method B — Check Solana SPL token balances**
+
+```bash
+spl-token accounts \
+  --owner <YOUR_SOLANA_PUBKEY> \
+  --url https://api.testnet.solana.com
+```
+
+Example output when bridge succeeds:
+
+```
+Token                                         Balance
+-----------------------------------------------------
+<MINT_ADDRESS>   1
+```
+
+**Method C — Hyperlane Explorer**
+
+Browse to: `https://explorer.hyperlane.xyz/?origin=pruvtest&destination=solanatestnet`
+
+### 11.4 Troubleshooting Delivery
+
+| Symptom                            | Cause                                          | Fix                                                        |
+| ---------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| `CALL_EXCEPTION` on EVM side       | Missing or wrong protocol fee value            | Ensure `value: quote` is included in `transferRemote` call |
+| `Repreparing message` in relayer   | ISM not configured or validator not announcing | Re-run Step 9.1 (ISM validators) and check validator logs  |
+| `Transfer: insufficient lamports`  | ATA payer PDA out of SOL                       | Fund the ATA payer PDA (Step 9.2)                          |
+| `Unable to reach quorum`           | Validator not running or not signing           | Check validator process and checkpoint files               |
+| `No logs mentioning solanatestnet` | Agent config missing solanatestnet chain       | Verify `agent-config-testnet.json` has solanatestnet entry |
+| Slow delivery (> 5 min)            | Solana testnet congestion or RPC rate limits   | Wait or switch to a dedicated Solana testnet RPC endpoint  |
+
+---
+
+## 12. Adding More Tokens to the Bridge
+
+Adding a new token does **not** require redeploying Hyperlane core or restarting agents. Only new warp routes are needed. The relayer automatically picks up messages through the shared Mailbox.
+
+**Prerequisites**: Sections 1–10 completed (core deployed, agents running).
+
+### A1. Deploy the New ERC20 Token on pruvtest (skip for native PRUV)
+
+```bash
+cd external_contracts/deployment-asset-script
+
+TOKEN_NAME="<YOUR_TOKEN_NAME>" TOKEN_SYMBOL="<YOUR_SYMBOL>" \
+PRIVATE_KEY=<YOUR_PRIVATE_KEY> \
+npx hardhat run scripts/deploy.ts --network pruvTestnet
+```
+
+Save: `NEW_TOKEN_ADDRESS=<printed address>`
+
+**Estimated fee**: ~0.0012 PRUV at 1 Gwei
+
+### A2. Create the EVM Warp Route Config
+
+Create a new YAML file (do **not** overwrite existing configs — each token gets its own file):
+
+```yaml
+# typescript/cli/configs/testnet-warp-<SYMBOL>.yaml
+pruvtest:
+  type: collateral
+  token: '<NEW_TOKEN_ADDRESS>'
+  owner: '<YOUR_EVM_ADDRESS>'
+  name: '<TOKEN_NAME>'
+  symbol: '<TOKEN_SYMBOL>'
+  decimals: 18
+  interchainSecurityModule:
+    type: defaultFallbackRoutingIsm
+    owner: '<YOUR_EVM_ADDRESS>'
+    domains: {}
+```
+
+### A3. Deploy the EVM Warp Route
+
+```bash
+cd typescript/cli
+
+HYP_KEY=<YOUR_PRIVATE_KEY> \
+node dist/cli.js warp deploy \
+  --config configs/testnet-warp-<SYMBOL>.yaml \
+  --registry .hyperlane \
+  --yes
+```
+
+Find the warp address:
+
+```bash
+cat .hyperlane/deployments/warp_routes/<SYMBOL>/testnet-warp-<SYMBOL>-config.yaml | grep addressOrDenom
+```
+
+Save: `NEW_WARP_EVM_ADDRESS=<addressOrDenom for pruvtest>`
+
+**Estimated fee**: ~0.0038 PRUV at 1 Gwei
+
+### A4. Create the Solana Warp Route Directory
+
+```bash
+mkdir -p rust/sealevel/environments/testnet/warp-routes/<symbol>-solana/keys
+echo '{}' > rust/sealevel/environments/testnet/warp-routes/<symbol>-solana/program-ids.json
+```
+
+Create `rust/sealevel/environments/testnet/warp-routes/<symbol>-solana/token-config.json`:
+
+```json
+{
+  "pruvtest": {
+    "foreignDeployment": "<NEW_WARP_EVM_ADDRESS>",
+    "type": "collateral",
+    "decimals": 18
+  },
+  "solanatestnet": {
+    "type": "synthetic",
+    "decimals": 9,
+    "remoteDecimals": 18,
+    "name": "<TOKEN_NAME>",
+    "symbol": "<TOKEN_SYMBOL>"
+  }
+}
+```
+
+### A5. Generate Keypairs and Deploy the Solana Warp Route
+
+```bash
+cd rust/sealevel/environments/testnet/warp-routes/<symbol>-solana/keys
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-keypair.json --no-bip39-passphrase
+solana-keygen new -o hyperlane_sealevel_token-solanatestnet-buffer.json --no-bip39-passphrase
+cd -
+
+cd rust/sealevel
+yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+  --environment testnet \
+  --environments-dir ./environments \
+  --built-so-dir ./target/deploy \
+  --warp-route-name <symbol>-solana \
+  --token-config-file ./environments/testnet/warp-routes/<symbol>-solana/token-config.json \
+  --registry .hyperlane \
+  --url https://api.testnet.solana.com
+```
+
+Note the **Solana Program ID (base58)** and get its hex:
+
+```bash
+node -e "
+const { PublicKey } = require('@solana/web3.js');
+const id = '<NEW_SOLANA_PROGRAM_ID_BASE58>';
+console.log('Hex:', '0x' + Buffer.from(new PublicKey(id).toBytes()).toString('hex'));
+"
+```
+
+**Estimated fee**: ~0.6–0.8 SOL
+
+### A6. Fund the ATA Payer PDA
+
+```bash
+ATA_PAYER=$(node -e "
+const { PublicKey } = require('@solana/web3.js');
+const programId = new PublicKey('<NEW_SOLANA_PROGRAM_ID_BASE58>');
+const [pda] = PublicKey.findProgramAddressSync(
+  [Buffer.from('hyperlane_token'), Buffer.from('-'), Buffer.from('ata_payer')],
+  programId
+);
+console.log(pda.toBase58());
+")
+echo "ATA Payer PDA: $ATA_PAYER"
+solana transfer $ATA_PAYER 0.5 \
+  --url https://api.testnet.solana.com \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  --allow-unfunded-recipient
+```
+
+**Estimated fee**: 0.5 SOL
+
+### A7. Enroll Routers on Both Sides
+
+**EVM side** — enroll the Solana program on the new EVM warp contract:
+
+```bash
+cast send <NEW_WARP_EVM_ADDRESS> \
+  "enrollRemoteRouter(uint32,bytes32)" \
+  1399811151 \
+  <NEW_SOLANA_PROGRAM_HEX> \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+```
+
+**Estimated fee**: ~0.00008 PRUV
+
+### A8. Test the New Token Bridge
+
+```bash
+# Mint tokens to yourself if needed
+cast send <NEW_TOKEN_ADDRESS> "mint(address,uint256)" \
+  <YOUR_EVM_ADDRESS> $(cast --to-wei 1000) \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+
+# Approve
+cast send <NEW_TOKEN_ADDRESS> "approve(address,uint256)" \
+  <NEW_WARP_EVM_ADDRESS> $(cast --to-wei 10) \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+
+# Bridge 1 token
+FEE=$(cast call <NEW_WARP_EVM_ADDRESS> "quoteGasPayment(uint32)(uint256)" 1399811151 \
+  --rpc-url https://rpc.testnet.pruv.network)
+
+cast send <NEW_WARP_EVM_ADDRESS> \
+  "transferRemote(uint32,bytes32,uint256)" \
+  1399811151 \
+  $(node -e "const {PublicKey}=require('@solana/web3.js'); console.log('0x'+Buffer.from(new PublicKey('<RECIPIENT_SOLANA_PUBKEY>').toBytes()).toString('hex'))") \
+  $(cast --to-wei 1) \
+  --value $FEE \
+  --private-key <YOUR_PRIVATE_KEY> \
+  --rpc-url https://rpc.testnet.pruv.network
+```
+
+Verify delivery using the same methods from Section 11.3.
+
+### Summary: What is Shared vs Per-Token
+
+| Component            | Shared (one per chain)             | Per token                         |
+| -------------------- | ---------------------------------- | --------------------------------- |
+| Mailbox              | One (already on pruvtest + Solana) |                                   |
+| MerkleTreeHook       | One per chain                      |                                   |
+| ValidatorAnnounce    | One per chain                      |                                   |
+| Multisig ISM         | One per chain                      |                                   |
+| Validator & Relayer  | Same agents relay all tokens       |                                   |
+| EVM warp contract    |                                    | One per token (collateral/native) |
+| Solana warp program  |                                    | One per token (synthetic)         |
+| Router enrollment    |                                    | Per warp route pair               |
+| ERC20 token contract |                                    | Per token (except native PRUV)    |
+| ATA Payer funding    |                                    | Per Solana warp program           |
+
+> **No agent restart needed.** The relayer automatically picks up all messages dispatched through the shared Mailbox, regardless of which warp route sent them.
+
+---
+
+## 13. Troubleshooting
+
+### Validator not announcing storage location
+
+The validator must announce its checkpoint storage so the relayer can find signed checkpoints.
+
+```bash
+# Check validator logs for announcement
+grep -i "announced\|announce" /tmp/hyperlane-pruv-db/validator-pruvtest/*.log 2>/dev/null || \
+  echo "Check validator stdout"
+```
+
+If not announcing, verify `HYP_CHECKPOINTSYNCER_TYPE` and `HYP_CHECKPOINTSYNCER_PATH` are set correctly.
+
+### "CouldNotFetchMetadata" in relayer logs
+
+The relayer cannot fetch ISM metadata (validator signatures). Common causes:
+
+1. **ISM not configured**: Re-run Step 9.1 to set validators on the Solana ISM.
+2. **Validator checkpoint path mismatch**: Ensure the relayer and validator use the same `CHECKPOINTSYNCER_PATH`.
+3. **Validator not yet signed**: Wait for the validator to process the block containing the message.
+
+### "Program not executable" on Solana deploy
+
+The `.so` file is corrupted or the wrong build target was used.
+
+```bash
+# Rebuild Solana programs
+cd rust/sealevel/programs
+./build-programs.sh all
+```
+
+### Solana RPC rate limits (429 errors)
+
+Use a dedicated RPC endpoint instead of the public one:
+
+```bash
+# Example paid/free alternatives:
+# https://rpc.ankr.com/solana_testnet
+# https://testnet.helius-rpc.com/?api-key=<KEY>
+```
+
+Update `agent-config-testnet.json` and environment metadata with the new RPC URL.
+
+### "Transaction attempting to announce validator reverted" (Solana validator)
+
+This is expected and non-blocking on Sealevel. The Sealevel implementation does not support on-chain validator announcement. Since `allowlocalcheckpointsyncers: true`, the relayer reads checkpoints from the local filesystem. This error is safe to ignore.
+
+### "Transfer: insufficient lamports" in relayer logs
+
+The ATA payer PDA for the warp route has run out of SOL. Re-fund it:
+
+```bash
+solana transfer <ATA_PAYER_PDA> 1 \
+  --url https://api.testnet.solana.com \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  --allow-unfunded-recipient
+```
+
+---
+
+## Script Reference
+
+| Script                             | Purpose                                                   |
+| ---------------------------------- | --------------------------------------------------------- |
+| `scripts/estimate-testnet-fees.ts` | Estimate SOL and PRUV costs for full deployment           |
+| `scripts/enroll-solana-testnet.ts` | Enroll Solana warp routes on pruvtest EVM warp contracts  |
+| `scripts/test-pruv-to-solana.ts`   | Bridge test: send PRUV/USDC/ERC20 from pruvtest to Solana |
+| `agent-config-testnet.json`        | Agent configuration template for pruvtest + solanatestnet |
+
+## File Reference
+
+| File / Directory                                                         | Purpose                                        |
+| ------------------------------------------------------------------------ | ---------------------------------------------- |
+| `typescript/cli/.hyperlane/chains/pruvtest/addresses.yaml`               | pruvtest core contract addresses               |
+| `typescript/cli/.hyperlane/chains/pruvtest/metadata.yaml`                | pruvtest chain metadata (RPC, chainId, domain) |
+| `rust/sealevel/environments/testnet/solanatestnet/core/program-ids.json` | Solana core program IDs (fill after deploy)    |
+| `rust/sealevel/environments/testnet/warp-routes/*/token-config.json`     | Warp route token configs (fill before deploy)  |
+| `rust/sealevel/environments/testnet/mock-registry/chains/metadata.yaml`  | Chain metadata for Hyperlane sealevel client   |
+| `typescript/cli/configs/testnet-warp-pruv-native.yaml`                   | EVM warp config for PRUV native token          |
+| `typescript/cli/configs/testnet-warp-usdc.yaml`                          | EVM warp config for USDC collateral            |
+| `typescript/cli/configs/testnet-warp-custom-erc20.yaml`                  | EVM warp config for custom ERC20 collateral    |

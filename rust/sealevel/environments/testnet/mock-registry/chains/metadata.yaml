@@ -1,0 +1,31 @@
+---
+# Chain registry for Pruv-Solana testnet bridge
+# Used by the hyperlane-sealevel-client when deploying core programs and warp routes
+
+solanatestnet:
+  chainId: 1399811151
+  domainId: 1399811151
+  isTestnet: true
+  name: solanatestnet
+  protocol: sealevel
+  displayName: Solana Testnet
+  nativeToken:
+    name: Solana
+    symbol: SOL
+    decimals: 9
+  rpcUrls:
+    - http: https://api.testnet.solana.com
+
+pruvtest:
+  chainId: 7336
+  domainId: 7336
+  isTestnet: true
+  name: pruvtest
+  protocol: ethereum
+  displayName: Pruv Testnet
+  nativeToken:
+    name: Pruv
+    symbol: PRUV
+    decimals: 18
+  rpcUrls:
+    - http: https://rpc.testnet.pruv.network

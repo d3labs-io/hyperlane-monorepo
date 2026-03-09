@@ -1,0 +1,15 @@
+{
+  "_comment": "USDC (ERC20 on pruvtest) → Solana Testnet (synthetic). Fill in foreignDeployment after deploying the pruvtest HypERC20Collateral warp contract.",
+  "pruvtest": {
+    "foreignDeployment": "REPLACE_WITH_USDC_WARP_EVM_ADDRESS",
+    "type": "collateral",
+    "decimals": 18
+  },
+  "solanatestnet": {
+    "type": "synthetic",
+    "decimals": 9,
+    "remoteDecimals": 18,
+    "name": "USDC (Warp)",
+    "symbol": "USDC"
+  }
+}

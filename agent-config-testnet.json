@@ -1,0 +1,76 @@
+{
+  "relaychains": "pruvtest,solanatestnet",
+  "chains": {
+    "pruvtest": {
+      "name": "pruvtest",
+      "chainId": 7336,
+      "domainId": 7336,
+      "mailbox": "0x72364A5F747a4e6E17b13Be4b421b879E95D95E7",
+      "merkleTreeHook": "0xA08C7fc82aD1565Ea1b7eEB24618c4B24c2733EC",
+      "interchainGasPaymaster": "0x4D73607C4462cc0D3B2Ab93a7521CEfDB10f1EC5",
+      "validatorAnnounce": "0x3B25B046bf50E3D469bbF2610bf564f11a4dC8c2",
+      "protocol": "ethereum",
+      "blocks": {
+        "reorgPeriod": 1,
+        "estimateBlockTime": 2,
+        "confirmations": 1
+      },
+      "rpcUrls": [
+        {
+          "http": "https://rpc.testnet.pruv.network"
+        }
+      ],
+      "index": {
+        "from": 0
+      }
+    },
+    "solanatestnet": {
+      "name": "solanatestnet",
+      "chainId": 1399811151,
+      "domainId": 1399811151,
+      "mailbox": "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID",
+      "merkleTreeHook": "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID",
+      "interchainGasPaymaster": "REPLACE_WITH_SOLANA_IGP_PROGRAM_ID",
+      "validatorAnnounce": "REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID",
+      "protocol": "sealevel",
+      "blocks": {
+        "reorgPeriod": 0,
+        "estimateBlockTime": 0.4,
+        "confirmations": 0
+      },
+      "rpcUrls": [
+        {
+          "http": "https://api.testnet.solana.com"
+        }
+      ],
+      "index": {
+        "from": 0,
+        "mode": "sequence"
+      },
+      "sealevelSenderConfig": {
+        "tree": {
+          "payer": "REPLACE_WITH_RELAYER_SOL_PUBKEY"
+        }
+      }
+    }
+  },
+  "allowlocalcheckpointsyncers": false,
+  "gaspaymentenforcement": [
+    {
+      "type": "none"
+    }
+  ],
+  "defaultsigner": {
+    "type": "hexKey",
+    "key": "REPLACE_WITH_YOUR_PRIVATE_KEY"
+  },
+  "_comments": {
+    "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID": "Option A: 75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR (official) | Option B: your deployed mailbox program ID",
+    "REPLACE_WITH_SOLANA_IGP_PROGRAM_ID": "Option A: 5p7Hii6CJL4xGBYYTGEQmH9LnUSZteFJUu9AVLDExZX2 (official) | Option B: your deployed IGP program ID",
+    "REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID": "Option A: 8qNYSi9EP1xSnRjtMpyof88A26GBbdcrsa61uSaHiwx3 (official) | Option B: your deployed validator_announce program ID",
+    "REPLACE_WITH_RELAYER_SOL_PUBKEY": "Solana pubkey of the relayer's payer wallet (used to pay Solana tx fees)",
+    "REPLACE_WITH_YOUR_PRIVATE_KEY": "EVM hex private key (0x...) for the validator and relayer signer on pruvtest",
+    "allowlocalcheckpointsyncers": "Set to true only for local development; for testnet use S3 or GCS checkpoint storage",
+    "gaspaymentenforcement": "Set to minimum for testnet; in production use {type:'minimum',payment:'1'}"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_comment": "PRUV native token bridge: pruvtest (native) → Solana Testnet (synthetic). Fill in EVM warp address after deploying the pruvtest HypNative warp contract.",
+  "pruvtest": {
+    "foreignDeployment": "REPLACE_WITH_PRUV_WARP_EVM_ADDRESS",
+    "type": "native",
+    "decimals": 18
+  },
+  "solanatestnet": {
+    "type": "synthetic",
+    "decimals": 9,
+    "remoteDecimals": 18,
+    "name": "Pruv (Warp)",
+    "symbol": "PRUV"
+  }
+}

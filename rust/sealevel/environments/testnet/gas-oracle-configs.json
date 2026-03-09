@@ -1,0 +1,23 @@
+{
+  "_comment": "Gas oracle configuration for the pruvtest <-> solanatestnet bridge. tokenExchangeRate is in units of (destination native token / source native token) × 1e18 for EVM sources. Adjust these values based on current token prices before deploying.",
+  "solanatestnet": {
+    "pruvtest": {
+      "oracleConfig": {
+        "tokenExchangeRate": "15000000000000000000",
+        "gasPrice": "1000000000",
+        "tokenDecimals": 18
+      },
+      "overhead": 151966
+    }
+  },
+  "pruvtest": {
+    "solanatestnet": {
+      "oracleConfig": {
+        "tokenExchangeRate": "1500000000000000",
+        "gasPrice": "1000",
+        "tokenDecimals": 9
+      },
+      "overhead": 600000
+    }
+  }
+}
