@@ -136,65 +136,53 @@ This is funded once at deploy and refilled as the bridge is used.
 
 ## 3. User Bridge Transaction Fees
 
-Every time a user bridges a token, fees are charged on the origin chain.
+### Fee Policy
 
-### 3.1 Fees Paid by the User on Pruv (Pruv → Solana)
+The bridge charges a **flat fee per transaction** to cover destination-chain processing costs:
+
+| Destination chain | Bridge fee    |
+| ----------------- | ------------- |
+| Ethereum mainnet  | **0.75 USDC** |
+| All other chains  | **0.1 USDC**  |
+
+> For the Pruv ↔ Solana bridge, the destination when bridging from Pruv is Solana (not Ethereum mainnet),
+> so the applicable fee is **0.1 USDC per transaction**.
+
+---
+
+### 3.1 Fees Paid by the User — Pruv → Solana
 
 > **Pruv is currently gasless. Users pay 0 PRUV in gas fees.**
-> The only on-chain cost is the IGP prepayment, which covers the relayer's Solana delivery costs.
 > When Pruv introduces gas in the future, users will also pay a small gas fee for the `transferRemote` call.
 
-| Fee                                 | Amount (current)                | Amount (future, at 1 Gwei)      | Where it goes                              |
-| ----------------------------------- | ------------------------------- | ------------------------------- | ------------------------------------------ |
-| Pruv gas for `transferRemote`       | **0 PRUV** (gasless)            | ~0.00025 PRUV (~250,000 gas)    | Pruv validators/miners (future)            |
-| Interchain gas prepayment (IGP fee) | Returned by `quoteGasPayment()` | Returned by `quoteGasPayment()` | Paid into IGP; relayer claims to cover SOL |
-
-**The IGP fee** is what the user pre-pays to cover the relayer's cost of delivering the message on Solana.
-The user does not need to hold any SOL — all Solana-side delivery costs are covered by this prepayment in PRUV.
-
-The IGP fee is determined by the `gas-oracle-configs.json` settings, which encode the SOL/PRUV price ratio
-and the estimated Solana compute units per delivery:
-
-```json
-"pruvtest": {
-  "solanatestnet": {
-    "oracleConfig": {
-      "tokenExchangeRate": "1500000000000000",  // SOL/PRUV price ratio × 1e18
-      "gasPrice": "1000",                        // Solana compute unit price (lamports)
-      "tokenDecimals": 9
-    },
-    "overhead": 600000                            // Solana compute units consumed per delivery
-  }
-}
-```
-
-At these settings, a typical delivery consumes ~600,000 compute units at 1000 lamports/unit = ~0.0006 SOL worth of PRUV as the IGP fee. This value scales with actual market prices and should be updated on mainnet deployment.
+| Fee                           | Amount (current)        | Amount (future, at 1 Gwei)   | Where it goes                                    |
+| ----------------------------- | ----------------------- | ---------------------------- | ------------------------------------------------ |
+| Pruv gas for `transferRemote` | **0 PRUV** (gasless)    | ~0.00025 PRUV (~250,000 gas) | Pruv validators (future)                         |
+| **Bridge fee**                | **0.1 USDC** (flat fee) | **0.1 USDC** (unchanged)     | Bridge operator (to cover Solana delivery costs) |
 
 > **User cost summary (Pruv → Solana):**
 >
 > - Pruv gas: **0 PRUV** (gasless; will be ~0.00025 PRUV after gas is introduced)
-> - IGP prepayment: small amount of PRUV equivalent to ~0.0006 SOL at current oracle rates
-> - **The bridge is effectively free for users on the Pruv side today**
+> - Bridge fee: **0.1 USDC** flat per transaction
+> - Users do **not** need to hold any SOL — all Solana-side delivery costs are covered by the bridge fee
 
-### 3.2 Fees Paid by the User on Solana (reverse bridge, Solana → Pruv)
+### 3.2 Fees Paid by the User — Solana → Pruv (reverse bridge)
 
-When a user bridges back from Solana to Pruv, they call the Solana warp program directly.
-They must hold a small amount of SOL. No PRUV is needed on Solana.
+When a user bridges back from Solana to Pruv, they only need to pay the Solana network gas fee.
+**No bridge fee is charged for this direction** — since Pruv is gasless, delivery on Pruv is free.
 
-| Fee                              | Amount                                       | Who pays                      |
-| -------------------------------- | -------------------------------------------- | ----------------------------- |
-| Solana base transaction fee      | ~0.000005 SOL (5,000 lamports)               | User (from their SOL balance) |
-| Compute unit priority fee        | ~0.0001–0.001 SOL (varies with network load) | User                          |
-| IGP fee (to cover Pruv delivery) | Small SOL amount quoted by Solana IGP        | User                          |
+| Fee                         | Amount                                       | Who pays                      |
+| --------------------------- | -------------------------------------------- | ----------------------------- |
+| Solana base transaction fee | ~0.000005 SOL (5,000 lamports)               | User (from their SOL balance) |
+| Compute unit priority fee   | ~0.0001–0.001 SOL (varies with network load) | User                          |
+| Bridge fee                  | **0 SOL** (Pruv destination is gasless)      | —                             |
 
-> Since Pruv is gasless, the Solana IGP oracle for the reverse direction sets `gasPrice: 0` for the Pruv chain,
-> meaning the IGP fee on this side is also effectively **~0 SOL** beyond base transaction costs.
-> When Pruv introduces gas, the Solana IGP oracle config will need to be updated to reflect this.
+> When Pruv introduces gas, a bridge fee may be introduced for this direction as well.
 
 ### 3.3 Fees Paid by the Operator (relayer delivery)
 
 The relayer payer wallet pays Solana transaction fees when delivering messages to the Solana side.
-These are offset by the IGP fees users pre-pay.
+These costs are covered by the bridge fees users pre-pay.
 
 | Cost per delivery                 | Amount                                |
 | --------------------------------- | ------------------------------------- |
@@ -344,14 +332,14 @@ The relayer picks up new warp routes automatically through the shared Mailbox.
 
 ## Quick Reference
 
-| Question                                   | Answer                                                                      |
-| ------------------------------------------ | --------------------------------------------------------------------------- |
-| What do users receive on Solana?           | A synthetic SPL token (wrapped PRUV, USDC, or custom ERC20), 9 decimals     |
-| Can users bridge back from Solana to Pruv? | Yes — same contracts, fully bidirectional                                   |
-| How much does a user pay per bridge?       | 0 PRUV gas (gasless) + small IGP prepayment; nearly free today              |
-| What is the one-time on-chain deploy cost? | ~15.7 SOL (permanent lock) + 0 PRUV (gasless Pruv)                          |
-| Is there monthly rent on Solana?           | No — rent is a one-time deposit, not a recurring charge                     |
-| What on-chain costs recur monthly?         | ~0.25 SOL/month (ATA payer + relayer fees) at low traffic                   |
-| How much to add one more token?            | ~2.9 SOL + 0 PRUV (gasless) one-time                                        |
-| What if I close a program later?           | All rent deposit is returned to your wallet                                 |
-| When will Pruv fees change?                | When Pruv introduces gas — re-evaluate all "0 PRUV" line items at that time |
+| Question                                   | Answer                                                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| What do users receive on Solana?           | A synthetic SPL token (wrapped PRUV, USDC, or custom ERC20), 9 decimals                                  |
+| Can users bridge back from Solana to Pruv? | Yes — same contracts, fully bidirectional                                                                |
+| How much does a user pay per bridge?       | Pruv → Solana: **0.1 USDC** flat fee + 0 PRUV gas (gasless); Solana → Pruv: Solana gas only (~0.001 SOL) |
+| What is the one-time on-chain deploy cost? | ~15.7 SOL (permanent lock) + 0 PRUV (gasless Pruv)                                                       |
+| Is there monthly rent on Solana?           | No — rent is a one-time deposit, not a recurring charge                                                  |
+| What on-chain costs recur monthly?         | ~0.25 SOL/month (ATA payer + relayer fees) at low traffic                                                |
+| How much to add one more token?            | ~2.9 SOL + 0 PRUV (gasless) one-time                                                                     |
+| What if I close a program later?           | All rent deposit is returned to your wallet                                                              |
+| When will Pruv fees change?                | When Pruv introduces gas — re-evaluate all "0 PRUV" line items at that time                              |
