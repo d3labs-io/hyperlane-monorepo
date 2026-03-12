@@ -134,6 +134,8 @@ export const FamilyVerificationDelay = {
   // Kaiascan needs time to index a newly deployed contract before it can be
   // verified. Without a sufficient delay the API returns {"error":"Unknown error"}.
   [ExplorerFamily.Kaiascan]: 15000,
+  // Routescan (e.g. Snowtrace) needs a short delay to index the contract.
+  [ExplorerFamily.Routescan]: 15000,
 } as const;
 
 /** Retrieves the constructor args using their respective Explorer and/or RPC (eth_getTransactionByHash)
