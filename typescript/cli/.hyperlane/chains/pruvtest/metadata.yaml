@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../schema.json
 blockExplorers:
-  - apiKey: ""
+  - apiKey: ''
     apiUrl: https://explorer.testnet.pruv.network/api
     family: blockscout
     name: explorerpruvtest

@@ -54,7 +54,7 @@
       }
     }
   },
-  "allowlocalcheckpointsyncers": false,
+  "allowlocalcheckpointsyncers": true,
   "gaspaymentenforcement": [
     {
       "type": "none"

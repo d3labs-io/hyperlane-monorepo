@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=../schema.json
+tokens:
+  - addressOrDenom: "0x433e1C2aDd37B6a6680E6ca28296D4C86C49a0B0"
+    chainName: pruvtest
+    collateralAddressOrDenom: "0xB707f867D48A30fA8E210605BcA4970CA55b8389"
+    decimals: 18
+    name: Wade
+    standard: EvmHypCollateral
+    symbol: Wade

@@ -18,22 +18,25 @@ import { ethers } from 'ethers';
 
 const CONFIG = {
   evmRpcUrl: 'https://rpc.testnet.pruv.network',
-  solanaRpcUrl: 'https://api.testnet.solana.com',
-  privateKey: process.env.PRIVATE_KEY || 'REPLACE_WITH_YOUR_EVM_PRIVATE_KEY',
+  solanaRpcUrl:
+    'https://api.zan.top/node/v1/solana/testnet/a6fe1b27d8204694827438361ed0ff32',
+  privateKey:
+    process.env.PRIVATE_KEY ||
+    '0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b',
 
-  // Solana recipient public key (base58). Defaults to env var or a placeholder.
+  // Solana recipient public key (base58) — deployer wallet
   solanaRecipientPubkey:
     process.env.RECIPIENT_SOLANA_PUBKEY ||
-    'REPLACE_WITH_RECIPIENT_SOLANA_PUBKEY',
+    'FT1XRZnjth3E2HbVCqghYzYqcQskDLgQuDstuKGAd1pJ',
 
-  // Official Solana Testnet domain (Hyperlane-registered)
-  solanaDomain: 1399811151,
+  // Solana Testnet domain ID — Hyperlane canonical value matching the deployed mailbox
+  solanaDomain: 1399811150,
 
   // Tokens to test — fill in after deploying warp routes
   tokens: [
     {
       name: 'PRUV native',
-      // HypNative warp contract on pruvtest
+      // HypNative warp contract on pruvtest — not yet deployed
       evmWarpAddress:
         process.env.PRUV_WARP_ADDRESS || 'REPLACE_WITH_PRUV_WARP_EVM_ADDRESS',
       // Set to empty string for native token (no ERC20 to approve)
@@ -44,6 +47,7 @@ const CONFIG = {
     },
     {
       name: 'USDC (ERC20 collateral)',
+      // Not yet deployed
       evmWarpAddress:
         process.env.USDC_WARP_ADDRESS || 'REPLACE_WITH_USDC_WARP_EVM_ADDRESS',
       erc20Address:
@@ -52,12 +56,15 @@ const CONFIG = {
       isNative: false,
     },
     {
-      name: 'Custom ERC20 collateral',
+      name: 'Custom ERC20 collateral (Wade)',
+      // HypERC20Collateral warp contract deployed on pruvtest
       evmWarpAddress:
         process.env.CUSTOM_WARP_ADDRESS ||
-        'REPLACE_WITH_CUSTOM_WARP_EVM_ADDRESS',
+        '0x433e1C2aDd37B6a6680E6ca28296D4C86C49a0B0',
+      // Wade ERC20 token contract on pruvtest
       erc20Address:
-        process.env.CUSTOM_ERC20_ADDRESS || 'REPLACE_WITH_CUSTOM_ERC20_ADDRESS',
+        process.env.CUSTOM_ERC20_ADDRESS ||
+        '0xB707f867D48A30fA8E210605BcA4970CA55b8389',
       amountHuman: '1',
       isNative: false,
     },
@@ -166,15 +173,45 @@ async function testToken(
       return;
     }
 
-    const allowance = await erc20.allowance(
-      wallet.address,
-      token.evmWarpAddress,
-    );
+    let allowance = await erc20.allowance(wallet.address, token.evmWarpAddress);
     if (allowance.lt(amount)) {
       console.log(`  Approving ${symbol} for warp contract...`);
-      const approveTx = await erc20.approve(token.evmWarpAddress, amount);
-      await approveTx.wait();
-      console.log(`  Approved.`);
+      const approveTx = await erc20.approve(token.evmWarpAddress, amount, {
+        gasLimit: 100_000,
+      });
+      try {
+        await approveTx.wait();
+        console.log(`  Approved.`);
+      } catch (approveErr: unknown) {
+        // On pruvtest the relayer shares the same key and may replace our tx (nonce conflict).
+        // Re-check the allowance: if it is already sufficient the approval effectively went through.
+        const errCode =
+          approveErr instanceof Error &&
+          (approveErr as { code?: string }).code === 'TRANSACTION_REPLACED';
+        if (errCode) {
+          console.log(
+            `  Approval tx replaced (nonce conflict with relayer) — re-checking allowance...`,
+          );
+          allowance = await erc20.allowance(
+            wallet.address,
+            token.evmWarpAddress,
+          );
+          if (allowance.lt(amount)) {
+            console.log(
+              `  Allowance still insufficient — retrying approval...`,
+            );
+            const retryTx = await erc20.approve(token.evmWarpAddress, amount, {
+              gasLimit: 100_000,
+            });
+            await retryTx.wait();
+            console.log(`  Approved (retry).`);
+          } else {
+            console.log(`  Allowance confirmed sufficient after replacement.`);
+          }
+        } else {
+          throw approveErr;
+        }
+      }
     } else {
       console.log(`  Already approved.`);
     }
@@ -187,12 +224,30 @@ async function testToken(
       { value: quote, gasLimit: 500_000 },
     );
     console.log(`  TX submitted: ${tx.hash}`);
-    const receipt = await tx.wait();
+    let receipt = await tx.wait().catch((err: unknown) => {
+      // If our tx was speed-replaced (same data, new hash), ethers provides the replacement receipt
+      if (
+        err instanceof Error &&
+        (
+          err as {
+            code?: string;
+            replacement?: { hash: string };
+            receipt?: unknown;
+          }
+        ).code === 'TRANSACTION_REPLACED' &&
+        (err as { cancelled?: boolean }).cancelled === false
+      ) {
+        return (
+          err as unknown as { receipt: ethers.providers.TransactionReceipt }
+        ).receipt;
+      }
+      throw err;
+    });
     console.log(
       `  Confirmed in block ${receipt.blockNumber}. Gas used: ${receipt.gasUsed.toString()}`,
     );
     console.log(
-      `  View on explorer: https://explorer.testnet.pruv.network/tx/${tx.hash}`,
+      `  View on explorer: https://explorer.testnet.pruv.network/tx/${receipt.transactionHash}`,
     );
   }
 }

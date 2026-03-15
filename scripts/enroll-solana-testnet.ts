@@ -24,10 +24,12 @@ const CONFIG = {
   evmRpcUrl: 'https://rpc.testnet.pruv.network',
 
   // Private key of the owner of the EVM warp contract
-  privateKey: process.env.PRIVATE_KEY || 'REPLACE_WITH_YOUR_EVM_PRIVATE_KEY',
+  privateKey:
+    process.env.PRIVATE_KEY ||
+    '0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b',
 
-  // Official Solana Testnet domain ID (Hyperlane registered)
-  solanaDomain: 1399811151,
+  // Official Solana Testnet domain ID (Hyperlane canonical, matches deployed mailbox)
+  solanaDomain: 1399811150,
 
   // Warp routes to enroll: add one entry per token
   routes: [
@@ -52,10 +54,10 @@ const CONFIG = {
       name: 'Custom ERC20 collateral',
       evmWarpAddress:
         process.env.CUSTOM_WARP_ADDRESS ||
-        'REPLACE_WITH_CUSTOM_WARP_EVM_ADDRESS',
+        '0x433e1C2aDd37B6a6680E6ca28296D4C86C49a0B0',
       solanaProgramHex:
         process.env.CUSTOM_SOLANA_HEX ||
-        'REPLACE_WITH_CUSTOM_SOLANA_PROGRAM_HEX',
+        '0xcc9029a778ee873c8d1130045cc7f1b005d80b0d08ef4ac06bf0e36c5eeb39d4',
     },
   ],
 };

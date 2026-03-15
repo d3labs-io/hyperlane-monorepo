@@ -3,8 +3,8 @@
 # Used by the hyperlane-sealevel-client when deploying core programs and warp routes
 
 solanatestnet:
-  chainId: 1399811151
-  domainId: 1399811151
+  chainId: 1399811150
+  domainId: 1399811150
   isTestnet: true
   name: solanatestnet
   protocol: sealevel
@@ -14,7 +14,7 @@ solanatestnet:
     symbol: SOL
     decimals: 9
   rpcUrls:
-    - http: https://api.testnet.solana.com
+    - http: https://api.zan.top/node/v1/solana/testnet/a6fe1b27d8204694827438361ed0ff32
 
 pruvtest:
   chainId: 7336

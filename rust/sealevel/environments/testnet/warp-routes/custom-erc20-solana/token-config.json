@@ -1,15 +1,15 @@
 {
-  "_comment": "Custom ERC20 token (on pruvtest) → Solana Testnet (synthetic). Fill in foreignDeployment after deploying the pruvtest HypERC20Collateral warp contract.",
   "pruvtest": {
-    "foreignDeployment": "REPLACE_WITH_CUSTOM_ERC20_WARP_EVM_ADDRESS",
+    "foreignDeployment": "0x433e1C2aDd37B6a6680E6ca28296D4C86C49a0B0",
     "type": "collateral",
+    "token": "0xB707f867D48A30fA8E210605BcA4970CA55b8389",
     "decimals": 18
   },
   "solanatestnet": {
     "type": "synthetic",
     "decimals": 9,
     "remoteDecimals": 18,
-    "name": "REPLACE_WITH_TOKEN_NAME",
-    "symbol": "REPLACE_WITH_TOKEN_SYMBOL"
+    "name": "Wade",
+    "symbol": "Wade"
   }
 }

@@ -1,18 +1,8 @@
 {
-  "_comment": "Fill in after deploying Hyperlane core on Solana Testnet. See TESTNET_GUIDE.md.",
-  "_option_a_official": {
-    "mailbox": "75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR",
-    "validator_announce": "8qNYSi9EP1xSnRjtMpyof88A26GBbdcrsa61uSaHiwx3",
-    "multisig_ism_message_id": "4GHxwWyKB9exhKG4fdyU2hfLgfFzhHp2WcsSKc2uNR1k",
-    "igp_program_id": "5p7Hii6CJL4xGBYYTGEQmH9LnUSZteFJUu9AVLDExZX2",
-    "overhead_igp_account": "hBHAApi5ZoeCYHqDdCKkCzVKmBdwywdT3hMqe327eZB",
-    "igp_account": "9SQVtTNsbipdMzumhzi6X8GwojiSMwBfqAhS7FgyTcqy"
-  },
-  "_option_b_own_deployment": "Replace the values below with your deployed program IDs after running Option B core deploy.",
-  "mailbox": "REPLACE_AFTER_DEPLOY",
-  "validator_announce": "REPLACE_AFTER_DEPLOY",
-  "multisig_ism_message_id": "REPLACE_AFTER_DEPLOY",
-  "igp_program_id": "REPLACE_AFTER_DEPLOY",
-  "overhead_igp_account": "REPLACE_AFTER_DEPLOY",
-  "igp_account": "REPLACE_AFTER_DEPLOY"
+  "mailbox": "GtVD47D6BNpwwyfyZodYCML4gbaioTUzBcsKauWKx8pp",
+  "validator_announce": "GAU6ZT22N3uvyyDekFGkYs6zwYEVycpb2AKySLztZbMu",
+  "multisig_ism_message_id": "7nRXyroYvy2aeasi4YaGfkoqeALneu4PP79ZWme5RxPN",
+  "igp_program_id": "9wcUapP8mWcX8coCCGmhi8Y1QqEGapxEmiD6ibd5wXiT",
+  "overhead_igp_account": "VFvnnTvbtNGNEi4a52GUSkpJmwPxKTSisqKAgkni4Tu",
+  "igp_account": "DwJsWANZFEtKLqxYbNGTzkHvxiRrkysS3yDaocaN7pDS"
 }

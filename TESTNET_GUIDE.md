@@ -28,7 +28,7 @@ This guide follows the **self-deployment path**: you deploy and own all Hyperlan
 ## 1. Overview and Architecture
 
 ```
-pruvtest (EVM, domain 7336)          Solana Testnet (domain 1399811151)
+pruvtest (EVM, domain 7336)          Solana Testnet (domain 1399811150)
 ────────────────────────────         ──────────────────────────────────
 Mailbox (existing)                   Mailbox (self-deployed, owned by you)
  └─ HypNative          ──dispatch──▶  └─ warp/token_native  → synthetic PRUV (SPL)
@@ -261,7 +261,7 @@ SOLANA_RPC=https://api.testnet.solana.com
 ./target/debug/hyperlane-sealevel-client core deploy \
   --url $SOLANA_RPC \
   --keypair $DEPLOYER_KEYPAIR \
-  --local-domain 1399811151 \
+  --local-domain 1399811150 \
   --environment testnet \
   --environments-dir ./environments \
   --built-so-dir ./target/deploy \
@@ -603,7 +603,7 @@ Or enroll manually via `cast` (one command per token):
 # PRUV
 cast send <PRUV_WARP_EVM_ADDRESS> \
   "enrollRemoteRouter(uint32,bytes32)" \
-  1399811151 \
+  1399811150 \
   <PRUV_SOLANA_PROGRAM_HEX> \
   --private-key <YOUR_PRIVATE_KEY> \
   --rpc-url https://rpc.testnet.pruv.network
@@ -611,7 +611,7 @@ cast send <PRUV_WARP_EVM_ADDRESS> \
 # USDC
 cast send <USDC_WARP_EVM_ADDRESS> \
   "enrollRemoteRouter(uint32,bytes32)" \
-  1399811151 \
+  1399811150 \
   <USDC_SOLANA_PROGRAM_HEX> \
   --private-key <YOUR_PRIVATE_KEY> \
   --rpc-url https://rpc.testnet.pruv.network
@@ -619,7 +619,7 @@ cast send <USDC_WARP_EVM_ADDRESS> \
 # Custom ERC20
 cast send <CUSTOM_WARP_EVM_ADDRESS> \
   "enrollRemoteRouter(uint32,bytes32)" \
-  1399811151 \
+  1399811150 \
   <CUSTOM_SOLANA_PROGRAM_HEX> \
   --private-key <YOUR_PRIVATE_KEY> \
   --rpc-url https://rpc.testnet.pruv.network
@@ -629,15 +629,35 @@ cast send <CUSTOM_WARP_EVM_ADDRESS> \
 
 ### 8.4 Verify Router Enrollment
 
-```bash
-# Check each warp contract has the Solana router enrolled
-for WARP in <PRUV_WARP_EVM_ADDRESS> <USDC_WARP_EVM_ADDRESS> <CUSTOM_WARP_EVM_ADDRESS>; do
-  echo "Warp: $WARP"
-  cast call $WARP "routers(uint32)(bytes32)" 1399811151 \
-    --rpc-url https://rpc.testnet.pruv.network
-  echo ""
-done
+> **Note**: `cast call` does not correctly encode `uint32` parameters for this ABI and returns `error code -32602: Invalid params`. Use the Node.js script below instead.
+
+```javascript
+// save as /tmp/verify-routers.js and run with: node /tmp/verify-routers.js
+const { ethers } = require('ethers');
+
+const RPC = 'https://rpc.testnet.pruv.network';
+const SOLANA_DOMAIN = 1399811150;
+const WARP_ABI = [
+  'function routers(uint32 _domain) external view returns (bytes32)',
+];
+const WARP_ADDRESSES = [
+  '<PRUV_WARP_EVM_ADDRESS>',
+  '<USDC_WARP_EVM_ADDRESS>',
+  '<CUSTOM_WARP_EVM_ADDRESS>',
+];
+
+async function main() {
+  const provider = new ethers.JsonRpcProvider(RPC);
+  for (const addr of WARP_ADDRESSES) {
+    const contract = new ethers.Contract(addr, WARP_ABI, provider);
+    const router = await contract.routers(SOLANA_DOMAIN);
+    console.log(`Warp ${addr} → Solana router: ${router}`);
+  }
+}
+main().catch(console.error);
 ```
+
+The returned `bytes32` value should match the hex representation of your Solana warp program ID. A value of all zeros means the router is NOT enrolled — re-run Section 8.3.
 
 ---
 
@@ -654,6 +674,26 @@ Edit `agent-config-testnet.json` in the repo root. Replace all `REPLACE_*` place
 | `REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID` | `validator_announce` from `program-ids.json`   |
 | `REPLACE_WITH_RELAYER_SOL_PUBKEY`                   | Relayer payer Solana pubkey (from Section 4.1) |
 | `REPLACE_WITH_YOUR_PRIVATE_KEY`                     | Your EVM private key (0x-prefixed)             |
+
+**Critical fields to verify in `agent-config-testnet.json`:**
+
+```json
+{
+  "allowlocalcheckpointsyncers": true,
+  "gaspaymentenforcement": [{ "type": "none" }],
+  "chains": {
+    "pruvtest": {
+      "index": { "from": 11337000 }
+    }
+  }
+}
+```
+
+> **`allowlocalcheckpointsyncers: true`** — Required when the validator stores checkpoints on the local filesystem. Without this the relayer refuses to read local checkpoint paths even if set correctly.
+>
+> **`gaspaymentenforcement: [{"type":"none"}]`** — Disables gas payment checks for testnet. Without this, `transferRemote` calls may be rejected for not meeting gas payment requirements.
+>
+> **`index.from`** — The relayer only scans for messages dispatched at or after this block number. Any `transferRemote` sent from a block earlier than this will **never be picked up** by the relayer, even after a restart. Set this to the block just before your first expected transfer.
 
 ### 9.2 Configure Checkpoint Storage
 
@@ -787,6 +827,46 @@ Token                                         Balance
 **Method C — Hyperlane Explorer**
 
 Browse to: `https://explorer.hyperlane.xyz/?origin=pruvtest&destination=solanatestnet`
+
+> **Tip**: You can also look up the Solana transaction directly. After bridging, run the Node.js snippet below to confirm token delivery:
+>
+> ```javascript
+> const { Connection, PublicKey } = require('@solana/web3.js');
+> async function main() {
+>   const conn = new Connection('<SOLANA_RPC_URL>', 'confirmed');
+>   const program = new PublicKey('<SOLANA_WARP_PROGRAM_ID>');
+>   const sigs = await conn.getSignaturesForAddress(program, { limit: 5 });
+>   for (const sig of sigs) {
+>     const tx = await conn.getTransaction(sig.signature, {
+>       maxSupportedTransactionVersion: 0,
+>     });
+>     if (
+>       tx?.meta?.logMessages?.some((l) =>
+>         l.includes('Warp route transfer completed'),
+>       )
+>     ) {
+>       console.log('Delivery confirmed:', sig.signature);
+>       tx.meta.preTokenBalances?.forEach((pre, i) => {
+>         const post = tx.meta.postTokenBalances?.[i];
+>         if (
+>           pre &&
+>           post &&
+>           pre.uiTokenAmount.uiAmountString !==
+>             post.uiTokenAmount.uiAmountString
+>         ) {
+>           console.log(
+>             'Balance change:',
+>             pre.uiTokenAmount.uiAmountString,
+>             '→',
+>             post.uiTokenAmount.uiAmountString,
+>           );
+>         }
+>       });
+>     }
+>   }
+> }
+> main().catch(console.error);
+> ```
 
 ### 10.4 Troubleshooting Delivery
 
@@ -947,7 +1027,7 @@ solana transfer $ATA_PAYER 0.5 \
 ```bash
 cast send <NEW_WARP_EVM_ADDRESS> \
   "enrollRemoteRouter(uint32,bytes32)" \
-  1399811151 \
+  1399811150 \
   <NEW_SOLANA_PROGRAM_HEX> \
   --private-key <YOUR_PRIVATE_KEY> \
   --rpc-url https://rpc.testnet.pruv.network
@@ -971,12 +1051,12 @@ cast send <NEW_TOKEN_ADDRESS> "approve(address,uint256)" \
   --rpc-url https://rpc.testnet.pruv.network
 
 # Bridge 1 token
-FEE=$(cast call <NEW_WARP_EVM_ADDRESS> "quoteGasPayment(uint32)(uint256)" 1399811151 \
+FEE=$(cast call <NEW_WARP_EVM_ADDRESS> "quoteGasPayment(uint32)(uint256)" 1399811150 \
   --rpc-url https://rpc.testnet.pruv.network)
 
 cast send <NEW_WARP_EVM_ADDRESS> \
   "transferRemote(uint32,bytes32,uint256)" \
-  1399811151 \
+  1399811150 \
   $(node -e "const {PublicKey}=require('@solana/web3.js'); console.log('0x'+Buffer.from(new PublicKey('<RECIPIENT_SOLANA_PUBKEY>').toBytes()).toString('hex'))") \
   $(cast --to-wei 1) \
   --value $FEE \
@@ -1063,6 +1143,111 @@ solana transfer <ATA_PAYER_PDA> 1 \
   --keypair ~/.config/solana/pruv-bridge-deployer.json \
   --allow-unfunded-recipient
 ```
+
+### "Unable to reach quorum" after a new transfer (stale checkpoint directory)
+
+**Symptom**: The relayer loops with `Could not fetch metadata: Unable to reach quorum` for a message even though the validator has signed a fresh checkpoint on disk.
+
+**Root cause**: The validator announces its checkpoint storage location on-chain via `ValidatorAnnounce`. If you ever ran the validator with a different `CHECKPOINTSYNCER_PATH`, that old path is permanently recorded on-chain. The relayer iterates all announced locations **in reverse order** (newest announcement first). If the newest announced path resolves to an empty or stale directory, the relayer picks up a `LocalStorage` syncer for it, fails to find the checkpoint, and never tries the older (but now active) path.
+
+**Diagnosis**:
+
+```bash
+# Count checkpoint files in each announced location
+ls /tmp/hyperlane-pruv-validator/         # old announcement
+ls /tmp/hyperlane-pruv-checkpoints/pruvtest/  # active path
+# Active path should have e.g. 463_with_id.json
+```
+
+**Fix — symlink the stale path to the active one**:
+
+```bash
+# Remove the stale directory that was announced but is no longer used
+rm -rf /tmp/hyperlane-pruv-validator
+
+# Symlink it to the active checkpoint directory
+ln -s /tmp/hyperlane-pruv-checkpoints/pruvtest /tmp/hyperlane-pruv-validator
+
+# Restart the relayer — no DB wipe needed
+```
+
+> **Prevention**: Use a single, stable `CHECKPOINTSYNCER_PATH` from the start and never change it. Each new path gets permanently recorded on-chain and cannot be removed.
+
+### Messages stuck with `InstructionError(2, InvalidArgument)` on Solana
+
+**Symptom**: The relayer repeatedly simulates the transaction and logs `InstructionError(2, InvalidArgument)` for a set of messages, while newer messages process fine.
+
+**Root cause**: These messages were dispatched from the EVM warp contract **before** you re-enrolled the new Solana warp program ID. They contain the recipient address of the old Solana warp route which is no longer configured correctly, so Solana rejects the instruction with an invalid argument error.
+
+**These messages are permanently stuck and cannot be delivered.** The relayer will keep retrying them up to 66 times before skipping them automatically. You can safely ignore these errors and focus on messages dispatched after the re-enrollment.
+
+> **Prevention**: Always re-enroll the Solana router on the EVM warp contract **before** sending any new test transfers. Verify enrollment (Section 8.4) before running bridge tests.
+
+### Messages skipped after exceeding max retries — do NOT wipe the relayer database
+
+**Symptom**: After many failed delivery attempts (66+), the relayer logs `Skipping message ... too many retries`. You want to reset retry counts but wiping the DB causes the relayer to get stuck at nonce 0.
+
+**Root cause**: When the relayer DB is wiped, `retrieve_highest_seen_message_nonce()` returns `None`, so the internal iterator starts at nonce `0`. If early messages (e.g. nonces 0–445) were dispatched before `index.from` and never indexed, the iterator has nothing to advance with and the relayer appears frozen — it never processes your new messages.
+
+**Fix — restart without wiping the database**:
+
+```bash
+# DO NOT rm -rf the relayer DB directory
+# Just kill the relayer and restart it:
+kill $(pgrep -f "target/debug/relayer")
+
+HYP_RELAYCHAINS="pruvtest,solanatestnet" \
+HYP_DB="/tmp/hyperlane-pruv-db/relayer" \
+HYP_TRACING_LEVEL="debug" \
+HYP_METRICSPORT="9090" \
+HYP_ALLOWLOCALCHECKPOINTSYNCERS="true" \
+HYP_DEFAULTSIGNER_KEY="<YOUR_PRIVATE_KEY>" \
+HYP_GASPAYMENTENFORCEMENT='[{"type":"none"}]' \
+CONFIG_FILES="<REPO_ROOT>/agent-config-testnet.json" \
+./target/debug/relayer 2>&1 | tee /tmp/relayer.log
+```
+
+On restart the relayer reads the highest nonce it previously saw from the DB and resumes from there, correctly picking up unprocessed messages.
+
+> **Why retries happen**: The relayer uses exponential backoff and retries each message up to `DEFAULT_MAX_MESSAGE_RETRIES = 66` times. Retries consume time but will eventually clear once the underlying issue (ISM config, checkpoint path, ATA payer balance) is fixed.
+
+### Verifying message delivery on Solana
+
+**Symptom**: The relayer shows `delivered: true` for a message but you want to confirm tokens actually arrived.
+
+```javascript
+// Check recent transactions for your warp program
+const { Connection, PublicKey } = require('@solana/web3.js');
+async function main() {
+  const conn = new Connection('<SOLANA_RPC_URL>', 'confirmed');
+  const warpProgram = new PublicKey('<SOLANA_WARP_PROGRAM_ID_BASE58>');
+  const sigs = await conn.getSignaturesForAddress(warpProgram, { limit: 10 });
+  for (const sig of sigs.filter((s) => !s.err)) {
+    const tx = await conn.getTransaction(sig.signature, {
+      maxSupportedTransactionVersion: 0,
+    });
+    const logs = tx?.meta?.logMessages ?? [];
+    if (logs.some((l) => l.includes('Warp route transfer completed'))) {
+      console.log('Delivery tx:', sig.signature);
+      tx.meta.preTokenBalances?.forEach((pre, i) => {
+        const post = tx.meta.postTokenBalances?.[i];
+        if (pre && post) {
+          const acct =
+            tx.transaction.message.staticAccountKeys[
+              pre.accountIndex
+            ].toString();
+          console.log(
+            `  ${acct}: ${pre.uiTokenAmount.uiAmountString} → ${post.uiTokenAmount.uiAmountString}`,
+          );
+        }
+      });
+    }
+  }
+}
+main().catch(console.error);
+```
+
+A successful delivery will show a log line containing `Warp route transfer completed` and a token balance increase for the recipient's ATA.
 
 ---
 
