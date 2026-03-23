@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=../schema.json
+tokens:
+  - addressOrDenom: "0x8Ca37eA1c9Aa339c190a6E869aEd349a9D020077"
+    chainName: pruvtest
+    collateralAddressOrDenom: "0xA058071c1dDd278919Dd9781b09A47c0F7D716D8"
+    decimals: 18
+    name: Edaw
+    standard: EvmHypCollateral
+    symbol: Edaw

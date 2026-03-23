@@ -1,0 +1,15 @@
+{
+  "pruvtest": {
+    "foreignDeployment": "0x8Ca37eA1c9Aa339c190a6E869aEd349a9D020077",
+    "type": "collateral",
+    "token": "0xA058071c1dDd278919Dd9781b09A47c0F7D716D8",
+    "decimals": 18
+  },
+  "solanatestnet": {
+    "type": "synthetic",
+    "decimals": 9,
+    "remoteDecimals": 18,
+    "name": "Edaw",
+    "symbol": "Edaw"
+  }
+}

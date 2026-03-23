@@ -60,12 +60,12 @@ const CONFIG = {
       // HypERC20Collateral warp contract deployed on pruvtest
       evmWarpAddress:
         process.env.CUSTOM_WARP_ADDRESS ||
-        '0x433e1C2aDd37B6a6680E6ca28296D4C86C49a0B0',
+        '0x8Ca37eA1c9Aa339c190a6E869aEd349a9D020077',
       // Wade ERC20 token contract on pruvtest
       erc20Address:
         process.env.CUSTOM_ERC20_ADDRESS ||
-        '0xB707f867D48A30fA8E210605BcA4970CA55b8389',
-      amountHuman: '1',
+        '0xA058071c1dDd278919Dd9781b09A47c0F7D716D8',
+      amountHuman: '3',
       isNative: false,
     },
   ],
@@ -217,32 +217,52 @@ async function testToken(
     }
 
     console.log(`  Sending ${token.amountHuman} ${symbol} to Solana...`);
-    const tx = await warpContract.transferRemote(
-      CONFIG.solanaDomain,
-      recipientBytes32,
-      amount,
-      { value: quote, gasLimit: 500_000 },
-    );
-    console.log(`  TX submitted: ${tx.hash}`);
-    let receipt = await tx.wait().catch((err: unknown) => {
-      // If our tx was speed-replaced (same data, new hash), ethers provides the replacement receipt
-      if (
-        err instanceof Error &&
-        (
-          err as {
-            code?: string;
-            replacement?: { hash: string };
-            receipt?: unknown;
-          }
-        ).code === 'TRANSACTION_REPLACED' &&
-        (err as { cancelled?: boolean }).cancelled === false
-      ) {
-        return (
-          err as unknown as { receipt: ethers.providers.TransactionReceipt }
-        ).receipt;
+
+    // Retry loop: the relayer shares the same private key and may steal our nonce.
+    // On TRANSACTION_REPLACED with cancelled=true we fetch a fresh nonce and retry.
+    let receipt!: ethers.providers.TransactionReceipt;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      if (attempt > 1) {
+        console.log(`  Retry attempt ${attempt}/5 — fetching fresh nonce...`);
+        await new Promise((r) => setTimeout(r, 2000));
       }
-      throw err;
-    });
+      const nonce = await provider.getTransactionCount(
+        wallet.address,
+        'latest',
+      );
+      const tx = await warpContract.transferRemote(
+        CONFIG.solanaDomain,
+        recipientBytes32,
+        amount,
+        { value: quote, gasLimit: 500_000, nonce },
+      );
+      console.log(`  TX submitted: ${tx.hash} (nonce ${nonce})`);
+      try {
+        receipt = await tx.wait();
+        break; // success
+      } catch (err: unknown) {
+        type ReplacedErr = {
+          code?: string;
+          cancelled?: boolean;
+          receipt?: ethers.providers.TransactionReceipt;
+        };
+        const e = err as ReplacedErr;
+        if (e.code === 'TRANSACTION_REPLACED') {
+          if (!e.cancelled) {
+            // Speed-bump replacement of our own tx — ethers provides the new receipt
+            receipt = e.receipt!;
+            break;
+          }
+          // A competing tx (relayer) took our nonce — retry with a fresh one
+          console.log(
+            `  TX replaced by relayer (nonce conflict) — will retry...`,
+          );
+          if (attempt === 5) throw err;
+          continue;
+        }
+        throw err;
+      }
+    }
     console.log(
       `  Confirmed in block ${receipt.blockNumber}. Gas used: ${receipt.gasUsed.toString()}`,
     );

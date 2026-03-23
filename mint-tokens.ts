@@ -12,7 +12,7 @@ async function mintTokens() {
 
   // Read RWA token address from config
   const configPath =
-    './typescript/cli/.hyperlane/deployments/warp_routes/Wade/local-warp-route-config.yaml';
+    './typescript/cli/.hyperlane/deployments/warp_routes/Edaw/testnet-warp-edaw-config.yaml';
 
   if (!fs.existsSync(configPath)) {
     console.error(`❌ Config file not found: ${configPath}`);
@@ -36,10 +36,11 @@ async function mintTokens() {
 
   // Setup
   const provider = new ethers.providers.JsonRpcProvider(
-    'http://127.0.0.1:8546',
+    'https://rpc.testnet.pruv.network',
   );
   const privateKey =
-    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+    process.env.PRIVATE_KEY ||
+    '0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b';
   const wallet = new ethers.Wallet(privateKey, provider);
 
   const rwaToken = new ethers.Contract(RWA_TOKEN, ERC20_ABI, wallet);

@@ -21,7 +21,7 @@
         }
       ],
       "index": {
-        "from": 11337000
+        "from": 11488856
       }
     },
     "solanatestnet": {
@@ -30,7 +30,7 @@
       "domainId": 1399811150,
       "mailbox": "GtVD47D6BNpwwyfyZodYCML4gbaioTUzBcsKauWKx8pp",
       "merkleTreeHook": "GtVD47D6BNpwwyfyZodYCML4gbaioTUzBcsKauWKx8pp",
-      "interchainGasPaymaster": "9wcUapP8mWcX8coCCGmhi8Y1QqEGapxEmiD6ibd5wXiT",
+      "interchainGasPaymaster": "VFvnnTvbtNGNEi4a52GUSkpJmwPxKTSisqKAgkni4Tu",
       "validatorAnnounce": "GAU6ZT22N3uvyyDekFGkYs6zwYEVycpb2AKySLztZbMu",
       "protocol": "sealevel",
       "blocks": {
