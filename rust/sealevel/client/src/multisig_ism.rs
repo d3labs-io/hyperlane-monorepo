@@ -189,44 +189,26 @@ pub(crate) fn deploy_multisig_ism_message_id(
         program_id
     );
 
-    // Check if already initialized by querying the access control PDA
-    let (access_control_pda_key, _) =
-        Pubkey::find_program_address(access_control_pda_seeds!(), &program_id);
-    let already_initialized = ctx
-        .client
-        .get_account_with_commitment(&access_control_pda_key, ctx.commitment)
-        .unwrap()
-        .value
-        .is_some();
+    // Initialize
+    let instruction = hyperlane_sealevel_multisig_ism_message_id::instruction::init_instruction(
+        program_id,
+        ctx.payer_pubkey,
+    )
+    .unwrap();
 
-    if already_initialized {
-        println!(
-            "Multisig ISM Message ID at program ID {} is already initialized, skipping init",
-            program_id
-        );
-    } else {
-        // Initialize
-        let instruction =
-            hyperlane_sealevel_multisig_ism_message_id::instruction::init_instruction(
-                program_id,
-                ctx.payer_pubkey,
-            )
-            .unwrap();
-
-        ctx.new_txn()
-            .add_with_description(
-                instruction,
-                format!(
-                    "Initializing Multisig ISM Message ID with payer & owner {}",
-                    ctx.payer_pubkey
-                ),
-            )
-            .send_with_payer();
-        println!(
-            "initialized Multisig ISM Message ID at program ID {}",
-            program_id
-        );
-    }
+    ctx.new_txn()
+        .add_with_description(
+            instruction,
+            format!(
+                "Initializing Multisig ISM Message ID with payer & owner {}",
+                ctx.payer_pubkey
+            ),
+        )
+        .send_with_payer();
+    println!(
+        "initialized Multisig ISM Message ID at program ID {}",
+        program_id
+    );
 
     program_id
 }

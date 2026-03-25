@@ -250,6 +250,30 @@ impl ChainSigner for hyperlane_radix::RadixSigner {
     }
 }
 
+#[async_trait]
+impl BuildableWithSignerConf for hyperlane_radix::RadixSigner {
+    async fn build(conf: &SignerConf) -> Result<Self, Report> {
+        if let SignerConf::RadixKey { key, suffix } = conf {
+            Ok(hyperlane_radix::RadixSigner::new(
+                key.as_bytes().to_vec(),
+                suffix.to_string(),
+            )?)
+        } else {
+            bail!(format!("{conf:?} key is not supported by radix"));
+        }
+    }
+}
+
+impl ChainSigner for hyperlane_radix::RadixSigner {
+    fn address_string(&self) -> String {
+        self.encoded_address.clone()
+    }
+
+    fn address_h256(&self) -> H256 {
+        self.address_256
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ethers::{signers::LocalWallet, utils::hex};
