@@ -4,11 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Hyperlane is an interchain messaging protocol that enables applications to communicate between blockchains. The monorepo contains three main components working together:
+**PRUV Bridge SC** is D3Labs' fork of the Hyperlane interchain messaging protocol, customized for the PRUV bridge product. It enables cross-chain token transfers with built-in fee collection, sender whitelisting, and RWA (Real World Asset) token support.
 
-1. **Smart Contracts (Solidity)** - Core on-chain messaging infrastructure
-2. **TypeScript SDK** - Developer tools and multi-protocol abstractions
+The monorepo contains four main components:
+
+1. **Smart Contracts (Solidity)** - Core Hyperlane messaging + D3Labs custom contracts (fee tokens, whitelisting)
+2. **TypeScript SDK** - Developer tools, multi-protocol abstractions, and Starknet bindings
 3. **Rust Agents** - Off-chain relayer network and validator infrastructure
+4. **External Contracts** - Standalone bridge contracts for EVM and Stellar chains
+
+## D3Labs Custom Contracts
+
+The following contracts are D3Labs additions on top of the Hyperlane base:
+
+### Token with Fee (`solidity/contracts/token/extensions/token_with_fee/`)
+- `HypERC20CollateralWithFee.sol` - ERC20 collateral router with cross-chain fee collection
+- `HypFiatTokenWithFee.sol` - Fiat-backed token (e.g., USDC/USDT) router with fee support
+- `RouterFeeCollector.sol` - Fee collection contract (max 10 USD, uses USDT/USDC 6 decimals)
+
+### Custom Hooks (`solidity/contracts/hooks/`)
+- `SenderWhitelistHook.sol` - Restricts bridge usage to whitelisted senders (for zero-gas chains)
+
+### External Contracts (`external_contracts/`)
+- `evm/` - Standalone EVM bridge: `TokenBridge.sol`, `BridgeStorage.sol`, `BridgeUserOperations.sol`, `BridgeSystemOperations.sol`
+- `stellar/` - Soroban token bridge contracts
+
+### Deployment Scripts (`deployment_scripts/`)
+- `deploy_router_fee_collector.sh` - Deploy RouterFeeCollector
+- `deploy_rwa_token.sh` - Deploy RWA token contracts
+- `deploy_sender_whitelist_hook.sh` - Deploy SenderWhitelistHook
+
+### Deployment Asset Scripts (`external_contracts/deployment-asset-script/`)
+- Hardhat-based deployment scripts for external bridge assets
+- Separate `package.json` (uses npm, not yarn)
+- Contains contracts, scripts, and tests for asset deployment
+
+### Bridge Scripts (`scripts/`)
+- `scripts-usdt/` - TypeScript scripts for programmatic USDT bridging between Kaia and PRUV
+- `scripts-rwa/` - TypeScript scripts for RWA token bridge operations
+
+## Supported Chains
+- **EVM**: Ethereum, Avalanche Fuji, Kaia (mainnet), Kairos (Kaia testnet)
+- **Stellar**: Soroban contracts
+- **Starknet**: Cairo contracts (via TypeScript bindings)
+- **Solana**: In development (`feat/solana-bridge` branch)
 
 ## Development Commands
 
@@ -164,6 +203,18 @@ cargo test --release --package run-locally --features sealevel -- sealevel::test
 - `rust/main/config/`: Contains chain configurations for mainnet/testnet deployments
 - Contract addresses and deployment metadata automatically synced from these configs
 - Agents automatically discover and use all configurations in this directory
+
+## Project-Specific Conventions
+
+- **Solidity version**: `0.8.22` (fixed, all D3Labs custom contracts use this explicitly)
+- **Foundry**: EVM version `paris`, optimizer runs `999_999`
+- **Package manager**: `yarn@4.5.1` (Yarn Berry)
+- **Node version**: v20
+- **Monorepo tool**: Turborepo
+- **Workspaces**: `solidity`, `typescript/*`, `starknet`
+- **Git organization**: `d3labs-io` on private GitHub (`github-d3labs.com`)
+- **Upstream**: Forked from Hyperlane — periodic sync via merge PRs (e.g., `Feat/sync fork`)
+- **External contracts** (`external_contracts/evm/`): Use Hardhat with separate `package.json` (npm, not yarn)
 
 ## Incident Debugging & Operations
 
