@@ -25,56 +25,91 @@ This guide covers provisioning an EC2 instance and configuring AWS services to r
 ## 1. Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  AWS Account                                                    │
-│                                                                 │
-│  ┌──────────────┐       ┌──────────────────────────────────┐    │
-│  │  S3 Bucket   │◄──────│  EC2 Instance (Ubuntu 22.04)     │    │
-│  │  (public     │ write │                                  │    │
-│  │   read)      │       │  ┌────────────┐ ┌─────────────┐  │    │
-│  │              │       │  │ Validator   │ │  Relayer     │  │    │
-│  └──────┬───────┘       │  │ (port 9091)│ │ (port 9090) │  │    │
-│         │               │  └────────────┘ └─────────────┘  │    │
-│         │ public read   └──────────────────────────────────┘    │
-│         │                                                       │
-│  ┌──────┴───────┐                                               │
-│  │ IAM User     │  AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY    │
-│  │ (validator)  │  used by Validator to write checkpoints       │
-│  └──────────────┘                                               │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  AWS Account (kms-bridge-dev, ap-southeast-2)                            │
+│                                                                          │
+│  ┌─────────────────┐    ┌──────────────────────────────────────────┐     │
+│  │  S3 Bucket      │◄───│  EC2 Instance (Ubuntu 22.04)             │     │
+│  │  (public read)  │ W  │                                          │     │
+│  └────────┬────────┘    │  ┌──────────────┐  ┌──────────────────┐ │     │
+│           │             │  │  Validator    │  │  Relayer          │ │     │
+│  ┌────────┴────────┐    │  │  (port 9091) │  │  (port 9090)     │ │     │
+│  │  KMS Key 1      │◄───│  │  KMS sign    │  │  KMS sign (EVM)  │ │     │
+│  │  validator-     │ S  │  │  checkpoints │  │  Hex key (Solana)│ │     │
+│  │  signer-staging │    │  └──────────────┘  └──────────────────┘ │     │
+│  └─────────────────┘    └──────────────────────────────────────────┘     │
+│                                                                          │
+│  ┌─────────────────┐                                                     │
+│  │  KMS Key 2      │  Relayer signs EVM txs (pruvtest delivery)          │
+│  │  relayer-       │                                                     │
+│  │  signer-staging │                                                     │
+│  └─────────────────┘                                                     │
+│                                                                          │
+│  ┌─────────────────┐                                                     │
+│  │  IAM User       │  AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY          │
+│  │  (single user   │  used for S3 writes + KMS signing by both agents    │
+│  │   for all)      │                                                     │
+│  └─────────────────┘                                                     │
+└──────────────────────────────────────────────────────────────────────────┘
          │                           │
          ▼                           ▼
    pruvtest RPC               Solana Testnet RPC
    (EVM, domain 7336)         (domain 1399811150)
 ```
 
-**Validator** watches the pruvtest Mailbox, signs checkpoint merkle roots, and writes them to S3.
+**Validator** watches the pruvtest Mailbox, signs checkpoint merkle roots using **KMS Key 1**, and writes them to S3.
 
-**Relayer** reads checkpoints from S3 (anonymously, no credentials needed), fetches validator signatures, and delivers messages to destination chains.
+**Relayer** reads checkpoints from S3 (anonymously), signs EVM delivery transactions using **KMS Key 2**, and signs Solana transactions using a **hex key** (KMS does not support Solana signing).
 
 ---
 
 ## 2. AWS Services Setup
 
-### 2.1 Create an S3 Bucket
+### Summary of AWS Resources
 
-The bucket stores validator checkpoint signatures. It must be **publicly readable** so any relayer can fetch checkpoints without credentials.
+| Resource  | Name (staging)                                      | Purpose                                         |
+| --------- | --------------------------------------------------- | ----------------------------------------------- |
+| IAM User  | `wade-solana-testnet-bridge`                        | Single service account for S3 + KMS             |
+| S3 Bucket | `wade-solana-testnet-bridge`                        | Validator checkpoint storage (public read)      |
+| KMS Key 1 | `alias/pruv-solana-bridge-validator-signer-staging` | Validator EVM signing (checkpoint attestations) |
+| KMS Key 2 | `alias/pruv-solana-testnet-relayer-signer-staging`  | Relayer EVM signing (pruvtest delivery txs)     |
+
+### 2.1 Create an IAM User (Service Account)
+
+Create a **dedicated service account** — not your admin login user. Both agents share this single identity.
+
+**AWS Console**: IAM → Users → Create user
+
+| Setting        | Value                                               |
+| -------------- | --------------------------------------------------- |
+| User name      | `wade-solana-testnet-bridge`                        |
+| Console access | **Do NOT enable** (service account only)            |
+| Permissions    | Skip — granted via bucket policy and KMS key policy |
+
+After creating the user:
+
+1. Click the user → **Security credentials** tab
+2. Click **Create access key** → Use case: **Other**
+3. Save the `Access Key ID` and `Secret Access Key`
+
+> Store securely — you only see the secret once. Use `chmod 600` on any file containing it.
+
+### 2.2 Create an S3 Bucket
+
+The bucket stores validator checkpoint signatures. It must be **publicly readable** so any relayer can fetch checkpoints anonymously.
 
 **AWS Console**: S3 → Create bucket
 
-| Setting             | Value                                                                                                      |
-| ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Bucket name         | `<project>-hyperlane-validator-signatures-<env>` (e.g. `wade-pruv-hyperlane-validator-signatures-testnet`) |
-| Region              | Your preferred region (e.g. `ap-southeast-1`)                                                              |
-| Object Ownership    | ACLs disabled (recommended)                                                                                |
-| Block Public Access | See below                                                                                                  |
-| Default encryption  | SSE-S3 (Amazon S3 managed keys)                                                                            |
-| Bucket Key          | Enabled                                                                                                    |
-| Bucket Versioning   | Enabled (recommended)                                                                                      |
-| Object Lock         | Disabled                                                                                                   |
+| Setting            | Value                                               |
+| ------------------ | --------------------------------------------------- |
+| Bucket name        | `wade-solana-testnet-bridge`                        |
+| Region             | `ap-southeast-2` (Sydney)                           |
+| Object Ownership   | ACLs disabled                                       |
+| Default encryption | SSE-S3 (Amazon S3 managed keys), Bucket Key enabled |
+| Bucket Versioning  | Enabled                                             |
+| Object Lock        | Disabled                                            |
 
-**Block Public Access settings** (critical — get this right):
+**Block Public Access settings** (critical):
 
 | Setting                           | Value         | Reason                                            |
 | --------------------------------- | ------------- | ------------------------------------------------- |
@@ -83,32 +118,11 @@ The bucket stores validator checkpoint signatures. It must be **publicly readabl
 | Block public bucket policies      | **Unchecked** | Must allow public bucket policy for relayer reads |
 | Block public cross-account access | **Unchecked** | Must allow anonymous public reads                 |
 
-> Do NOT use SSE-KMS encryption — the anonymous relayer client cannot decrypt KMS-encrypted objects.
-
-### 2.2 Create an IAM User
-
-The validator needs AWS credentials to write checkpoint files to S3.
-
-**AWS Console**: IAM → Users → Create user
-
-| Setting        | Value                                                                           |
-| -------------- | ------------------------------------------------------------------------------- |
-| User name      | `<project>-validator-<chain>-<env>` (e.g. `wade-validator-pruv-solana-testnet`) |
-| Console access | Do NOT enable (service account only)                                            |
-| Permissions    | Skip for now (access granted via bucket policy)                                 |
-
-After creating the user:
-
-1. Go to the user → **Security credentials** tab
-2. Click **Create access key**
-3. Use case: **Other** (or "Application running outside AWS")
-4. Save the `Access Key ID` and `Secret Access Key`
-
-> You only see the secret once. Store it securely (e.g. AWS Secrets Manager, a password vault, or an env file on the EC2 instance with `chmod 600`).
+> Do NOT use SSE-KMS encryption — the relayer's anonymous client cannot decrypt KMS-encrypted objects.
 
 ### 2.3 Apply the S3 Bucket Policy
 
-Go to your S3 bucket → **Permissions** → **Bucket policy** and paste:
+Go to your S3 bucket → **Permissions** → **Bucket policy** (not CORS) and paste:
 
 ```json
 {
@@ -119,13 +133,16 @@ Go to your S3 bucket → **Permissions** → **Bucket policy** and paste:
       "Effect": "Allow",
       "Principal": "*",
       "Action": ["s3:GetObject", "s3:ListBucket"],
-      "Resource": ["arn:aws:s3:::<BUCKET_NAME>", "arn:aws:s3:::<BUCKET_NAME>/*"]
+      "Resource": [
+        "arn:aws:s3:::wade-solana-testnet-bridge",
+        "arn:aws:s3:::wade-solana-testnet-bridge/*"
+      ]
     },
     {
-      "Sid": "ValidatorWrite",
+      "Sid": "AgentWrite",
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::<ACCOUNT_ID>:user/<IAM_USERNAME>"
+        "AWS": "arn:aws:iam::267772924106:user/wade-solana-testnet-bridge"
       },
       "Action": [
         "s3:PutObject",
@@ -133,17 +150,72 @@ Go to your S3 bucket → **Permissions** → **Bucket policy** and paste:
         "s3:ListBucket",
         "s3:DeleteObject"
       ],
-      "Resource": ["arn:aws:s3:::<BUCKET_NAME>", "arn:aws:s3:::<BUCKET_NAME>/*"]
+      "Resource": [
+        "arn:aws:s3:::wade-solana-testnet-bridge",
+        "arn:aws:s3:::wade-solana-testnet-bridge/*"
+      ]
     }
   ]
 }
 ```
 
-Replace:
+### 2.4 Create KMS Keys
 
-- `<BUCKET_NAME>` — your S3 bucket name
-- `<ACCOUNT_ID>` — your AWS account ID (digits only, no dashes)
-- `<IAM_USERNAME>` — the IAM user created in Step 2.2
+Create two asymmetric KMS keys — one for validator signing, one for relayer signing.
+
+**AWS Console**: KMS → Customer managed keys → Create key
+
+For each key use these settings:
+
+| Setting   | Value                                                 |
+| --------- | ----------------------------------------------------- |
+| Key type  | **Asymmetric**                                        |
+| Key usage | **Sign and verify**                                   |
+| Key spec  | **ECC_SECG_P256K1** (secp256k1 — Ethereum compatible) |
+
+|                       | Key 1 (Validator)                             | Key 2 (Relayer)                              |
+| --------------------- | --------------------------------------------- | -------------------------------------------- |
+| Alias                 | `pruv-solana-bridge-validator-signer-staging` | `pruv-solana-testnet-relayer-signer-staging` |
+| Key administrators    | Your admin IAM user                           | Your admin IAM user                          |
+| Key usage permissions | `wade-solana-testnet-bridge`                  | `wade-solana-testnet-bridge`                 |
+
+After creating both keys, verify the key policy for each includes `kms:Sign` and `kms:GetPublicKey` for `wade-solana-testnet-bridge`. If the auto-generated policy only has `kms:CreateGrant` and `kms:DescribeKey`, edit it and add:
+
+```json
+"Action": [
+  "kms:CreateGrant",
+  "kms:DescribeKey",
+  "kms:Sign",
+  "kms:GetPublicKey"
+]
+```
+
+### 2.5 Update Solana Multisig ISM with New Validator Address
+
+The KMS validator key generates a **new EVM address**. The Solana ISM must be updated to recognize it.
+
+**Get the validator's new EVM address** — start the validator briefly and look for:
+
+```
+INFO validator::validator: Attempting self announce, eth_validator_address: 0x<NEW_ADDRESS>
+```
+
+**Then update the ISM:**
+
+```bash
+cd rust/sealevel
+
+MULTISIG_ISM=$(cat environments/testnet/solanatestnet/core/program-ids.json | \
+  python3 -c "import json,sys; print(json.load(sys.stdin)['multisig_ism_message_id'])")
+
+./target/debug/hyperlane-sealevel-client multisig-ism-message-id set-validators-and-threshold \
+  --program-id $MULTISIG_ISM \
+  --domain 7336 \
+  --validators <NEW_VALIDATOR_EVM_ADDRESS> \
+  --threshold 1 \
+  --url https://api.testnet.solana.com \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json
+```
 
 ---
 
@@ -279,28 +351,33 @@ cat ~/pruv-bridge-sc/rust/main/config/agent-config-testnet.json | jq .
 
 Key fields to verify:
 
-| Field                          | Expected Value                     |
-| ------------------------------ | ---------------------------------- |
-| `allowlocalcheckpointsyncers`  | `false`                            |
-| `gaspaymentenforcement`        | `[{"type":"none"}]`                |
-| `chains.pruvtest.rpcUrls`      | Your pruvtest RPC URL              |
-| `chains.solanatestnet.rpcUrls` | Your Solana testnet RPC URL        |
-| `defaultsigner.key`            | Your EVM private key (0x-prefixed) |
+| Field                              | Expected Value                                       |
+| ---------------------------------- | ---------------------------------------------------- |
+| `allowlocalcheckpointsyncers`      | `false`                                              |
+| `gaspaymentenforcement`            | `[{"type":"none"}]`                                  |
+| `defaultsigner.type`               | `"aws"`                                              |
+| `defaultsigner.id`                 | `"alias/pruv-solana-testnet-relayer-signer-staging"` |
+| `defaultsigner.region`             | `"ap-southeast-2"`                                   |
+| `chains.solanatestnet.signer.type` | `"hexKey"` (KMS does not support Solana)             |
 
-### 5.2 Create an Environment File
+### 5.2 Create Environment Files
 
-Store sensitive values in an env file instead of embedding them in shell commands:
+Store sensitive values in env files instead of embedding them in shell commands:
 
 ```bash
 sudo mkdir -p /etc/hyperlane
+
+# Validator env file (KMS signing + S3 checkpoints)
 sudo tee /etc/hyperlane/validator.env > /dev/null << 'EOF'
 AWS_ACCESS_KEY_ID=<YOUR_AWS_ACCESS_KEY_ID>
 AWS_SECRET_ACCESS_KEY=<YOUR_AWS_SECRET_ACCESS_KEY>
 HYP_ORIGINCHAINNAME=pruvtest
-HYP_VALIDATOR_KEY=<YOUR_EVM_PRIVATE_KEY>
+HYP_VALIDATOR_TYPE=aws
+HYP_VALIDATOR_ID=alias/pruv-solana-bridge-validator-signer-staging
+HYP_VALIDATOR_REGION=ap-southeast-2
 HYP_CHECKPOINTSYNCER_TYPE=s3
-HYP_CHECKPOINTSYNCER_BUCKET=<YOUR_S3_BUCKET_NAME>
-HYP_CHECKPOINTSYNCER_REGION=<YOUR_AWS_REGION>
+HYP_CHECKPOINTSYNCER_BUCKET=wade-solana-testnet-bridge
+HYP_CHECKPOINTSYNCER_REGION=ap-southeast-2
 HYP_CHECKPOINTSYNCER_FOLDER=pruvtest
 HYP_DB=/var/lib/hyperlane/validator-pruvtest
 HYP_TRACING_LEVEL=info
@@ -309,17 +386,21 @@ CONFIG_FILES=/home/ubuntu/pruv-bridge-sc/rust/main/config/agent-config-testnet.j
 EOF
 sudo chmod 600 /etc/hyperlane/validator.env
 
+# Relayer env file (KMS signing for EVM, hex key for Solana via config file)
 sudo tee /etc/hyperlane/relayer.env > /dev/null << 'EOF'
+AWS_ACCESS_KEY_ID=<YOUR_AWS_ACCESS_KEY_ID>
+AWS_SECRET_ACCESS_KEY=<YOUR_AWS_SECRET_ACCESS_KEY>
 HYP_RELAYCHAINS=pruvtest,solanatestnet
 HYP_DB=/var/lib/hyperlane/relayer
 HYP_TRACING_LEVEL=info
 HYP_METRICSPORT=9090
-HYP_DEFAULTSIGNER_KEY=<YOUR_EVM_PRIVATE_KEY>
 HYP_GASPAYMENTENFORCEMENT=[{"type":"none"}]
 CONFIG_FILES=/home/ubuntu/pruv-bridge-sc/rust/main/config/agent-config-testnet.json
 EOF
 sudo chmod 600 /etc/hyperlane/relayer.env
 ```
+
+> The relayer's KMS signer (`defaultsigner`) and Solana hex key (`chains.solanatestnet.signer`) are both configured in `agent-config-testnet.json`. No `HYP_DEFAULTSIGNER_*` env vars needed — the config file handles it.
 
 ### 5.3 Create Data Directories
 
@@ -652,16 +733,26 @@ The returned data should include the S3 storage location string.
 
 ## Quick Reference: Full Command Summary
 
-### Validator (S3 checkpoint storage)
+### Signer Architecture
+
+| Chain          | Agent     | Signer                                                                                 |
+| -------------- | --------- | -------------------------------------------------------------------------------------- |
+| pruvtest (EVM) | Validator | KMS `alias/pruv-solana-bridge-validator-signer-staging`                                |
+| pruvtest (EVM) | Relayer   | KMS `alias/pruv-solana-testnet-relayer-signer-staging` (via `defaultsigner` in config) |
+| solanatestnet  | Relayer   | Hex key `0x44928c...` (via `chains.solanatestnet.signer` in config)                    |
+
+### Validator (KMS signing + S3 checkpoints)
 
 ```bash
-AWS_ACCESS_KEY_ID="<AWS_KEY>" \
-AWS_SECRET_ACCESS_KEY="<AWS_SECRET>" \
+AWS_ACCESS_KEY_ID="<AWS_ACCESS_KEY_ID>" \
+AWS_SECRET_ACCESS_KEY="<AWS_SECRET_ACCESS_KEY>" \
 HYP_ORIGINCHAINNAME="pruvtest" \
-HYP_VALIDATOR_KEY="<EVM_PRIVATE_KEY>" \
+HYP_VALIDATOR_TYPE="aws" \
+HYP_VALIDATOR_ID="alias/pruv-solana-bridge-validator-signer-staging" \
+HYP_VALIDATOR_REGION="ap-southeast-2" \
 HYP_CHECKPOINTSYNCER_TYPE="s3" \
-HYP_CHECKPOINTSYNCER_BUCKET="<S3_BUCKET_NAME>" \
-HYP_CHECKPOINTSYNCER_REGION="<AWS_REGION>" \
+HYP_CHECKPOINTSYNCER_BUCKET="wade-solana-testnet-bridge" \
+HYP_CHECKPOINTSYNCER_REGION="ap-southeast-2" \
 HYP_CHECKPOINTSYNCER_FOLDER="pruvtest" \
 HYP_DB="/var/lib/hyperlane/validator-pruvtest" \
 HYP_TRACING_LEVEL="info" \
@@ -670,15 +761,18 @@ CONFIG_FILES="/home/ubuntu/pruv-bridge-sc/rust/main/config/agent-config-testnet.
 ./target/debug/validator
 ```
 
-### Relayer (no AWS credentials needed)
+### Relayer (KMS signing for EVM, hex key for Solana)
 
 ```bash
+AWS_ACCESS_KEY_ID="<AWS_ACCESS_KEY_ID>" \
+AWS_SECRET_ACCESS_KEY="<AWS_SECRET_ACCESS_KEY>" \
 HYP_RELAYCHAINS="pruvtest,solanatestnet" \
 HYP_DB="/var/lib/hyperlane/relayer" \
 HYP_TRACING_LEVEL="info" \
 HYP_METRICSPORT="9090" \
-HYP_DEFAULTSIGNER_KEY="<EVM_PRIVATE_KEY>" \
 HYP_GASPAYMENTENFORCEMENT='[{"type":"none"}]' \
 CONFIG_FILES="/home/ubuntu/pruv-bridge-sc/rust/main/config/agent-config-testnet.json" \
 ./target/debug/relayer
 ```
+
+> The relayer's KMS signer for pruvtest and hex key for solanatestnet are both configured in `agent-config-testnet.json` (`defaultsigner` and `chains.solanatestnet.signer`). No `HYP_DEFAULTSIGNER_*` env vars needed.

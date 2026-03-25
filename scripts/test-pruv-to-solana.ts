@@ -218,24 +218,53 @@ async function testToken(
 
     console.log(`  Sending ${token.amountHuman} ${symbol} to Solana...`);
 
-    // Retry loop: the relayer shares the same private key and may steal our nonce.
-    // On TRANSACTION_REPLACED with cancelled=true we fetch a fresh nonce and retry.
+    // Retry loop: handles nonce conflicts and stale RPC nonce responses.
+    // Uses 'pending' nonce when available, falls back to incrementing on rejection.
     let receipt!: ethers.providers.TransactionReceipt;
-    for (let attempt = 1; attempt <= 5; attempt++) {
+    let nonceOverride: number | undefined;
+    for (let attempt = 1; attempt <= 10; attempt++) {
       if (attempt > 1) {
-        console.log(`  Retry attempt ${attempt}/5 — fetching fresh nonce...`);
+        console.log(`  Retry attempt ${attempt}/10 — fetching fresh nonce...`);
         await new Promise((r) => setTimeout(r, 2000));
       }
-      const nonce = await provider.getTransactionCount(
-        wallet.address,
-        'latest',
-      );
-      const tx = await warpContract.transferRemote(
-        CONFIG.solanaDomain,
-        recipientBytes32,
-        amount,
-        { value: quote, gasLimit: 500_000, nonce },
-      );
+      // Prefer 'pending' nonce to account for in-flight txs on the RPC
+      let nonce: number;
+      if (nonceOverride !== undefined) {
+        nonce = nonceOverride;
+      } else {
+        try {
+          nonce = await provider.getTransactionCount(wallet.address, 'pending');
+        } catch {
+          nonce = await provider.getTransactionCount(wallet.address, 'latest');
+        }
+      }
+      console.log(`  Using nonce ${nonce}`);
+      let tx: ethers.providers.TransactionResponse;
+      try {
+        tx = await warpContract.transferRemote(
+          CONFIG.solanaDomain,
+          recipientBytes32,
+          amount,
+          { value: quote, gasLimit: 500_000, nonce },
+        );
+      } catch (sendErr: unknown) {
+        // Nonce too low — RPC returned a stale value, bump and retry immediately
+        const msg =
+          sendErr instanceof Error ? sendErr.message : String(sendErr);
+        if (
+          msg.includes('Nonce too low') ||
+          msg.includes('nonce too low') ||
+          msg.includes('NONCE_EXPIRED')
+        ) {
+          console.log(
+            `  Nonce ${nonce} rejected (too low) — bumping to ${nonce + 1}...`,
+          );
+          nonceOverride = nonce + 1;
+          if (attempt === 10) throw sendErr;
+          continue;
+        }
+        throw sendErr;
+      }
       console.log(`  TX submitted: ${tx.hash} (nonce ${nonce})`);
       try {
         receipt = await tx.wait();
@@ -249,15 +278,12 @@ async function testToken(
         const e = err as ReplacedErr;
         if (e.code === 'TRANSACTION_REPLACED') {
           if (!e.cancelled) {
-            // Speed-bump replacement of our own tx — ethers provides the new receipt
             receipt = e.receipt!;
             break;
           }
-          // A competing tx (relayer) took our nonce — retry with a fresh one
-          console.log(
-            `  TX replaced by relayer (nonce conflict) — will retry...`,
-          );
-          if (attempt === 5) throw err;
+          console.log(`  TX replaced (nonce conflict) — will retry...`);
+          nonceOverride = undefined; // re-fetch fresh nonce
+          if (attempt === 10) throw err;
           continue;
         }
         throw err;

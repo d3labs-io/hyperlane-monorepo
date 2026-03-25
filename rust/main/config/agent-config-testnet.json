@@ -51,6 +51,10 @@
         "tree": {
           "payer": "FT1XRZnjth3E2HbVCqghYzYqcQskDLgQuDstuKGAd1pJ"
         }
+      },
+      "signer": {
+        "type": "hexKey",
+        "key": "0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b"
       }
     }
   },
@@ -61,8 +65,9 @@
     }
   ],
   "defaultsigner": {
-    "type": "hexKey",
-    "key": "0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b"
+    "type": "aws",
+    "id": "alias/pruv-solana-testnet-relayer-signer-staging",
+    "region": "ap-southeast-2"
   },
   "_comments": {
     "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID": "Option A: 75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR (official) | Option B: your deployed mailbox program ID",
