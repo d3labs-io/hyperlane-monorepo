@@ -22,6 +22,7 @@ solidity/artifacts
 
 .yarn/install-state.gz
 .yarn/cache
+scripts/.yarn/
 yarn-error.log
 
 .turbo
