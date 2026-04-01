@@ -14,7 +14,8 @@ This guide follows the **self-deployment path**: you deploy and own all Hyperlan
 2. [Prerequisites](#2-prerequisites)
 3. [Fee Estimation](#3-fee-estimation)
 4. [Wallet Setup](#4-wallet-setup)
-5. [Deploy Hyperlane Core on Solana Testnet](#5-deploy-hyperlane-core-on-solana-testnet)
+5. [Deploy Hyperlane Core on Solana Devnet](#5-deploy-hyperlane-core-on-solana-devnet)
+   - [5.5 Verify Deployed Programs](#55-verify-deployed-programs)
 6. [Deploy EVM Warp Routes on pruvtest](#6-deploy-evm-warp-routes-on-pruvtest)
 7. [Deploy Solana Warp Routes](#7-deploy-solana-warp-routes)
 8. [Configure ISM and Enroll Routers](#8-configure-ism-and-enroll-routers)
@@ -294,6 +295,202 @@ Example output:
 ```
 
 Save these values — you will use them in `agent-config-testnet.json` (Section 9).
+
+### 5.5 Verify Deployed Programs
+
+Verification proves that the on-chain program binary matches the source code in this repository. It is required for **Solscan** and **Solana Explorer** to display the program as "Verified Source".
+
+There are two layers:
+
+| Layer                     | Tool                                   | Works on devnet?                        | Shows source on Solscan?           |
+| ------------------------- | -------------------------------------- | --------------------------------------- | ---------------------------------- |
+| Hash comparison (local)   | `verify-solana-programs.sh`            | ✓ Yes                                   | No (internal check only)           |
+| On-chain PDA registration | `solana-verify` + Docker + public repo | Hash check yes; PDA submit yes (devnet) | Yes — once Solscan indexes the PDA |
+
+---
+
+#### Step A — Install `solana-verify`
+
+```bash
+cargo install solana-verify
+```
+
+Verify installation:
+
+```bash
+solana-verify --version
+```
+
+You also need **Docker** running for the reproducible build step:
+
+```bash
+docker --version   # Docker Desktop must be running
+```
+
+---
+
+#### Step B — Build Verifiably (Docker-based, reproducible)
+
+The `solana-verify build` command builds inside a Docker container with a pinned Solana toolchain, producing a deterministic binary whose hash can be trusted by anyone.
+
+> **Solana version**: The programs require `1.14.20`. Use `--solana-version 1.14.20` to select the matching Docker image.
+
+Run from `rust/sealevel/` (one command per program):
+
+```bash
+cd rust/sealevel
+
+# Mailbox
+solana-verify build \
+  --library-name hyperlane_sealevel_mailbox \
+  --solana-version 1.14.20
+
+# IGP
+solana-verify build \
+  --library-name hyperlane_sealevel_igp \
+  --solana-version 1.14.20
+
+# Validator Announce
+solana-verify build \
+  --library-name hyperlane_sealevel_validator_announce \
+  --solana-version 1.14.20
+
+# Multisig ISM
+solana-verify build \
+  --library-name hyperlane_sealevel_multisig_ism_message_id \
+  --solana-version 1.14.20
+```
+
+Each command prints the **executable hash** after building. Save these — you'll compare them against the deployed hashes next.
+
+---
+
+#### Step C — Compare Local Build Hash vs Deployed Hash
+
+**Option 1 — Automated (recommended)**
+
+Use the provided script, which dumps each deployed program and compares SHA256 hashes with the local build artifacts:
+
+```bash
+# From the repo root
+bash scripts/verify-solana-programs.sh \
+  --url https://api.devnet.solana.com \
+  --program-ids-file rust/sealevel/environments/testnet/solanadevnet/core/program-ids.json
+```
+
+Expected output when all programs match:
+
+```
+  MATCH | hyperlane_sealevel_mailbox               (<PROGRAM_ID>)
+  MATCH | hyperlane_sealevel_igp                   (<PROGRAM_ID>)
+  MATCH | hyperlane_sealevel_validator_announce     (<PROGRAM_ID>)
+  MATCH | hyperlane_sealevel_multisig_ism_message_id (<PROGRAM_ID>)
+
+  All programs verified ✓
+```
+
+**Option 2 — Manual with `solana-verify`**
+
+```bash
+cd rust/sealevel
+
+# Get hash of local build
+solana-verify get-executable-hash target/deploy/hyperlane_sealevel_mailbox.so
+
+# Get hash of deployed program
+solana-verify get-program-hash \
+  --url https://api.devnet.solana.com \
+  <MAILBOX_PROGRAM_ID>
+
+# Repeat for each program (igp, validator_announce, multisig_ism_message_id)
+```
+
+Both hashes must match exactly. A mismatch means either the local build or the deployed binary is from a different source — rebuild with `build-programs.sh` and redeploy if needed.
+
+---
+
+#### Step D — Register On-Chain Verification (for Solscan visibility)
+
+Once hashes match, register the verification on-chain. This creates a PDA that Solscan, Solana Explorer, and SolanaFM read to display the "Verified Source" badge.
+
+> **Requirement**: The source code must be in a **public** GitHub repository. If using a private fork, first push a public mirror of the sealevel programs directory (or the full repo).
+
+```bash
+cd rust/sealevel
+
+SOLANA_RPC=https://api.devnet.solana.com
+REPO_URL=https://github.com/<YOUR_ORG>/<YOUR_REPO>
+COMMIT=$(git rev-parse HEAD)
+MOUNT_PATH=rust/sealevel   # path inside the repo to the Cargo.toml workspace
+
+# Register each program (replace program IDs from program-ids.json)
+for PROGRAM in \
+  "hyperlane_sealevel_mailbox:<MAILBOX_PROGRAM_ID>" \
+  "hyperlane_sealevel_igp:<IGP_PROGRAM_ID>" \
+  "hyperlane_sealevel_validator_announce:<VA_PROGRAM_ID>" \
+  "hyperlane_sealevel_multisig_ism_message_id:<ISM_PROGRAM_ID>"
+do
+  LIB_NAME="${PROGRAM%%:*}"
+  PROG_ID="${PROGRAM##*:}"
+
+  echo "Registering $LIB_NAME → $PROG_ID"
+  solana-verify verify-from-repo \
+    --url $SOLANA_RPC \
+    --program-id $PROG_ID \
+    --commit-hash $COMMIT \
+    --library-name $LIB_NAME \
+    --mount-path $MOUNT_PATH \
+    $REPO_URL
+  echo ""
+done
+```
+
+When prompted: **answer `y`** to upload the verification data on-chain.
+
+After submitting, check the on-chain PDA status:
+
+```bash
+# Mailbox example
+solana-verify get-program-hash \
+  --url https://api.devnet.solana.com \
+  <MAILBOX_PROGRAM_ID>
+```
+
+---
+
+#### Step E — View Verified Programs on Solscan
+
+After on-chain registration, the program appears as verified on:
+
+- **Solscan devnet**: `https://solscan.io/account/<PROGRAM_ID>?cluster=devnet`
+- **Solana Explorer devnet**: `https://explorer.solana.com/address/<PROGRAM_ID>?cluster=devnet`
+
+Solscan may take a few minutes to index the on-chain PDA. Once indexed, the "Verified Build" badge appears on the program's account page.
+
+---
+
+#### Step F — Add Program Labels (optional)
+
+To display a human-readable name for your programs on Solscan (visible to all users):
+
+1. Go to `https://solscan.io/account/<PROGRAM_ID>?cluster=devnet`
+2. Click **"Add label"** (requires Solscan account or email submission)
+3. Submit: `Hyperlane Mailbox (PRUV Bridge)` as the label
+
+Alternatively contact Solscan via their [Discord](https://discord.gg/solscan) to bulk-label all bridge programs.
+
+---
+
+#### Verification Summary
+
+| Program            | JSON key                  | Library name                                 |
+| ------------------ | ------------------------- | -------------------------------------------- |
+| Mailbox            | `mailbox`                 | `hyperlane_sealevel_mailbox`                 |
+| IGP                | `igp_program_id`          | `hyperlane_sealevel_igp`                     |
+| Validator Announce | `validator_announce`      | `hyperlane_sealevel_validator_announce`      |
+| Multisig ISM       | `multisig_ism_message_id` | `hyperlane_sealevel_multisig_ism_message_id` |
+
+> **Note**: Warp route programs (token, token_native, token_collateral) can be verified the same way using their respective library names and program IDs from each warp route's `program-ids.json`.
 
 ---
 
@@ -1255,12 +1452,13 @@ A successful delivery will show a log line containing `Warp route transfer compl
 
 ## Script Reference
 
-| Script                                       | Purpose                                                   |
-| -------------------------------------------- | --------------------------------------------------------- |
-| `scripts/estimate-testnet-fees.ts`           | Estimate SOL and PRUV costs for full deployment           |
-| `scripts/enroll-solana-testnet.ts`           | Enroll Solana warp routes on pruvtest EVM warp contracts  |
-| `scripts/test-pruv-to-solana.ts`             | Bridge test: send PRUV/USDC/ERC20 from pruvtest to Solana |
-| `rust/main/config/agent-config-testnet.json` | Agent configuration template for pruvtest + solanadevnet  |
+| Script                                       | Purpose                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------ |
+| `scripts/estimate-testnet-fees.ts`           | Estimate SOL and PRUV costs for full deployment                    |
+| `scripts/enroll-solana-testnet.ts`           | Enroll Solana warp routes on pruvtest EVM warp contracts           |
+| `scripts/test-pruv-to-solana.ts`             | Bridge test: send PRUV/USDC/ERC20 from pruvtest to Solana          |
+| `scripts/verify-solana-programs.sh`          | Hash-compare deployed programs vs local builds (pre-Solscan check) |
+| `rust/main/config/agent-config-testnet.json` | Agent configuration template for pruvtest + solanadevnet           |
 
 ## File Reference
 
