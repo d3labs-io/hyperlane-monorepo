@@ -1,5 +1,5 @@
 {
-  "relaychains": "pruvtest,solanatestnet",
+  "relaychains": "pruvtest,solanadevnet",
   "chains": {
     "pruvtest": {
       "name": "pruvtest",
@@ -24,14 +24,14 @@
         "from": 11488856
       }
     },
-    "solanatestnet": {
-      "name": "solanatestnet",
-      "chainId": 1399811150,
-      "domainId": 1399811150,
-      "mailbox": "GtVD47D6BNpwwyfyZodYCML4gbaioTUzBcsKauWKx8pp",
-      "merkleTreeHook": "GtVD47D6BNpwwyfyZodYCML4gbaioTUzBcsKauWKx8pp",
-      "interchainGasPaymaster": "VFvnnTvbtNGNEi4a52GUSkpJmwPxKTSisqKAgkni4Tu",
-      "validatorAnnounce": "GAU6ZT22N3uvyyDekFGkYs6zwYEVycpb2AKySLztZbMu",
+    "solanadevnet": {
+      "name": "solanadevnet",
+      "chainId": 1399811151,
+      "domainId": 1399811151,
+      "mailbox": "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID",
+      "merkleTreeHook": "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID",
+      "interchainGasPaymaster": "REPLACE_WITH_SOLANA_IGP_OVERHEAD_ACCOUNT",
+      "validatorAnnounce": "REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID",
       "protocol": "sealevel",
       "blocks": {
         "reorgPeriod": 0,
@@ -40,7 +40,7 @@
       },
       "rpcUrls": [
         {
-          "http": "https://api.zan.top/node/v1/solana/testnet/a6fe1b27d8204694827438361ed0ff32"
+          "http": "https://api.devnet.solana.com"
         }
       ],
       "index": {
@@ -49,12 +49,12 @@
       },
       "sealevelSenderConfig": {
         "tree": {
-          "payer": "FT1XRZnjth3E2HbVCqghYzYqcQskDLgQuDstuKGAd1pJ"
+          "payer": "REPLACE_WITH_RELAYER_SOL_PUBKEY"
         }
       },
       "signer": {
         "type": "hexKey",
-        "key": "0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b"
+        "key": "REPLACE_WITH_YOUR_PRIVATE_KEY"
       }
     }
   },
@@ -66,13 +66,13 @@
   ],
   "defaultsigner": {
     "type": "aws",
-    "id": "alias/pruv-solana-testnet-relayer-signer-staging",
+    "id": "alias/pruv-solana-devnet-relayer-signer-staging",
     "region": "ap-southeast-2"
   },
   "_comments": {
-    "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID": "Option A: 75HBBLae3ddeneJVrZeyrDfv6vb7SMC3aCpBucSXS5aR (official) | Option B: your deployed mailbox program ID",
-    "REPLACE_WITH_SOLANA_IGP_PROGRAM_ID": "Option A: 5p7Hii6CJL4xGBYYTGEQmH9LnUSZteFJUu9AVLDExZX2 (official) | Option B: your deployed IGP program ID",
-    "REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID": "Option A: 8qNYSi9EP1xSnRjtMpyof88A26GBbdcrsa61uSaHiwx3 (official) | Option B: your deployed validator_announce program ID",
+    "REPLACE_WITH_SOLANA_MAILBOX_PROGRAM_ID": "Your deployed mailbox program ID from environments/testnet/solanadevnet/core/program-ids.json",
+    "REPLACE_WITH_SOLANA_IGP_OVERHEAD_ACCOUNT": "overhead_igp_account from environments/testnet/solanadevnet/core/program-ids.json",
+    "REPLACE_WITH_SOLANA_VALIDATOR_ANNOUNCE_PROGRAM_ID": "validator_announce from environments/testnet/solanadevnet/core/program-ids.json",
     "REPLACE_WITH_RELAYER_SOL_PUBKEY": "Solana pubkey of the relayer's payer wallet (used to pay Solana tx fees)",
     "REPLACE_WITH_YOUR_PRIVATE_KEY": "EVM hex private key (0x...) for the validator and relayer signer on pruvtest",
     "allowlocalcheckpointsyncers": "Set to true only for local development; for testnet use S3 or GCS checkpoint storage",

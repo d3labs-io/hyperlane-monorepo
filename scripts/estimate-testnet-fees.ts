@@ -2,11 +2,11 @@
  * Testnet Fee Estimator for Pruv-Solana Bridge
  *
  * Estimates deployment costs for bridging PRUV native token, USDC, and custom
- * ERC20 tokens from pruvtest (EVM) to Solana Testnet using Hyperlane.
+ * ERC20 tokens from pruvtest (EVM) to Solana Devnet using Hyperlane.
  *
  * Two deployment paths are estimated:
- *   Option A: Use official Hyperlane Solana Testnet core programs (warp route only)
- *   Option B: Deploy own Hyperlane core programs on Solana Testnet (full control)
+ *   Option A: Use official Hyperlane Solana Devnet core programs (warp route only)
+ *   Option B: Deploy own Hyperlane core programs on Solana Devnet (full control)
  *
  * Run: npx ts-node scripts/estimate-testnet-fees.ts
  */
@@ -18,7 +18,7 @@ import * as path from 'path';
 // ─── Chain Configuration ────────────────────────────────────────────────────
 
 const PRUV_RPC = 'https://rpc.testnet.pruv.network';
-const SOLANA_TESTNET_RPC = 'https://api.testnet.solana.com';
+const SOLANA_TESTNET_RPC = 'https://api.devnet.solana.com';
 
 // pruvtest core contracts (already deployed)
 const PRUV_ADDRESSES = {
@@ -520,9 +520,9 @@ async function main(): Promise<void> {
     `    Total PRUV for all EVM steps     : ~${formatPruv(evmTotalPruv + 0.5)} (includes 0.5 PRUV buffer)`,
   );
   console.log('');
-  console.log('  Note: Solana testnet SOL can be obtained for free via:');
+  console.log('  Note: Solana devnet SOL can be obtained for free via:');
   console.log(
-    '    solana airdrop 2 <WALLET_ADDRESS> --url https://api.testnet.solana.com',
+    '    solana airdrop 2 <WALLET_ADDRESS> --url https://api.devnet.solana.com',
   );
   console.log(
     '  Repeat the airdrop as needed (1-2 SOL per request, rate-limited).',

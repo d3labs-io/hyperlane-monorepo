@@ -1,7 +1,7 @@
 /**
  * enroll-solana-testnet.ts
  *
- * Enrolls a Solana Testnet warp route program as the remote router on the
+ * Enrolls a Solana Devnet warp route program as the remote router on the
  * corresponding pruvtest EVM warp contract.
  *
  * Must be run AFTER both EVM and Solana warp routes have been deployed.
@@ -28,8 +28,8 @@ const CONFIG = {
     process.env.PRIVATE_KEY ||
     '0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b',
 
-  // Official Solana Testnet domain ID (Hyperlane canonical, matches deployed mailbox)
-  solanaDomain: 1399811150,
+  // Solana Devnet domain ID — must match the --local-domain used during core deploy
+  solanaDomain: 1399811151,
 
   // Warp routes to enroll: add one entry per token
   routes: [

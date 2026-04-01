@@ -1,7 +1,7 @@
 /**
  * test-pruv-to-solana.ts
  *
- * Tests the Pruv Testnet → Solana Testnet bridge for each configured token.
+ * Tests the Pruv Testnet → Solana Devnet bridge for each configured token.
  * Sends a small bridge transfer for each token and waits for the relayer to deliver.
  *
  * Usage:
@@ -18,8 +18,7 @@ import { ethers } from 'ethers';
 
 const CONFIG = {
   evmRpcUrl: 'https://rpc.testnet.pruv.network',
-  solanaRpcUrl:
-    'https://api.zan.top/node/v1/solana/testnet/a6fe1b27d8204694827438361ed0ff32',
+  solanaRpcUrl: 'https://api.devnet.solana.com',
   privateKey:
     process.env.PRIVATE_KEY ||
     '0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b',
@@ -29,8 +28,8 @@ const CONFIG = {
     process.env.RECIPIENT_SOLANA_PUBKEY ||
     'FT1XRZnjth3E2HbVCqghYzYqcQskDLgQuDstuKGAd1pJ',
 
-  // Solana Testnet domain ID — Hyperlane canonical value matching the deployed mailbox
-  solanaDomain: 1399811150,
+  // Solana Devnet domain ID — must match the --local-domain used during core deploy
+  solanaDomain: 1399811151,
 
   // Tokens to test — fill in after deploying warp routes
   tokens: [
@@ -363,17 +362,17 @@ async function main(): Promise<void> {
   console.log('');
   console.log('  The relayer will deliver messages to Solana asynchronously.');
   console.log(
-    '  Monitor the relayer logs for "Message delivered on solanatestnet".',
+    '  Monitor the relayer logs for "Message delivered on solanadevnet".',
   );
   console.log('');
   console.log('  To check Solana token balances after delivery:');
   console.log(
-    `    spl-token accounts --owner ${CONFIG.solanaRecipientPubkey} --url https://api.testnet.solana.com`,
+    `    spl-token accounts --owner ${CONFIG.solanaRecipientPubkey} --url https://api.devnet.solana.com`,
   );
   console.log('');
   console.log('  To check on Hyperlane Explorer:');
   console.log(
-    '    https://explorer.hyperlane.xyz/?origin=pruvtest&destination=solanatestnet',
+    '    https://explorer.hyperlane.xyz/?origin=pruvtest&destination=solanadevnet',
   );
 }
 

@@ -5,7 +5,7 @@
     "token": "0xB707f867D48A30fA8E210605BcA4970CA55b8389",
     "decimals": 18
   },
-  "solanatestnet": {
+  "solanadevnet": {
     "type": "synthetic",
     "decimals": 9,
     "remoteDecimals": 18,

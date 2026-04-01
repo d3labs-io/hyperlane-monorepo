@@ -1,10 +1,10 @@
 {
-  "solanatestnet": {
-    "hex": "0xcc9029a778ee873c8d1130045cc7f1b005d80b0d08ef4ac06bf0e36c5eeb39d4",
-    "base58": "EmXfn6GD9RhPtQWtQk1awo4xr3gjaRxjeUTTdsgWgCC3"
+  "solanadevnet": {
+    "hex": "REPLACE_AFTER_DEPLOY",
+    "base58": "REPLACE_AFTER_DEPLOY"
   },
   "pruvtest": {
-    "hex": "0x000000000000000000000000433e1c2add37b6a6680e6ca28296d4c86c49a0b0",
-    "base58": "111111111111wLQSmZdke4ivgLiARYewEqc9EAb"
+    "hex": "REPLACE_AFTER_DEPLOY",
+    "base58": "REPLACE_AFTER_DEPLOY"
   }
 }
