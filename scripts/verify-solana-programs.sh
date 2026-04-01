@@ -8,7 +8,7 @@
 #   ./scripts/verify-solana-programs.sh [--url <RPC_URL>] [--program-ids-file <PATH>]
 #
 # Defaults:
-#   --url              https://api.devnet.solana.com
+#   --url              https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 #   --program-ids-file rust/sealevel/environments/testnet/solanadevnet/core/program-ids.json
 #
 # Prerequisites:
@@ -34,17 +34,24 @@ set -euo pipefail
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOLANA_RPC="${SOLANA_RPC:-https://api.devnet.solana.com}"
+SOLANA_RPC="${SOLANA_RPC:-https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32}"
 PROGRAM_IDS_FILE="${PROGRAM_IDS_FILE:-$REPO_ROOT/rust/sealevel/environments/testnet/solanadevnet/core/program-ids.json}"
 BUILD_DIR="$REPO_ROOT/rust/sealevel/target/deploy"
 TMP_DIR="$(mktemp -d)"
 
 # Map from JSON key → .so file name (without extension)
-declare -A PROGRAM_SO_MAP=(
-  ["mailbox"]="hyperlane_sealevel_mailbox"
-  ["igp_program_id"]="hyperlane_sealevel_igp"
-  ["validator_announce"]="hyperlane_sealevel_validator_announce"
-  ["multisig_ism_message_id"]="hyperlane_sealevel_multisig_ism_message_id"
+# Two parallel arrays — avoids bash 4 associative array requirement (macOS ships bash 3.2)
+PROGRAM_JSON_KEYS=(
+  "mailbox"
+  "igp_program_id"
+  "validator_announce"
+  "multisig_ism_message_id"
+)
+PROGRAM_SO_NAMES=(
+  "hyperlane_sealevel_mailbox"
+  "hyperlane_sealevel_igp"
+  "hyperlane_sealevel_validator_announce"
+  "hyperlane_sealevel_multisig_ism_message_id"
 )
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -127,8 +134,10 @@ main() {
   local all_passed=true
   local results=()
 
-  for json_key in "${!PROGRAM_SO_MAP[@]}"; do
-    local so_name="${PROGRAM_SO_MAP[$json_key]}"
+  local i
+  for i in "${!PROGRAM_JSON_KEYS[@]}"; do
+    local json_key="${PROGRAM_JSON_KEYS[$i]}"
+    local so_name="${PROGRAM_SO_NAMES[$i]}"
     local program_id
     program_id=$(jq -r ".\"$json_key\" // empty" "$PROGRAM_IDS_FILE")
 

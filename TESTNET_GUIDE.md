@@ -168,7 +168,7 @@ You need two Solana wallets:
 # Deployer keypair (reusable across sessions)
 solana-keygen new -o ~/.config/solana/pruv-bridge-deployer.json --no-bip39-passphrase
 solana config set --keypair ~/.config/solana/pruv-bridge-deployer.json
-solana config set --url https://api.devnet.solana.com
+solana config set --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 
 # Print deployer public key
 solana address
@@ -195,7 +195,7 @@ for i in 1 2 3 4 5 6; do
   echo "Airdrop $i complete. Waiting 30s..."
   sleep 30
 done
-solana balance --url https://api.devnet.solana.com
+solana balance --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 
 # Fund relayer payer
 RELAYER_PAYER_PUBKEY=$(node -e "
@@ -206,8 +206,8 @@ console.log(Keypair.fromSeed(seed.slice(0, 32)).publicKey.toBase58());
 solana airdrop 1 $RELAYER_PAYER_PUBKEY --url https://api.devnet.solana.com
 
 # Check balances
-solana balance --url https://api.devnet.solana.com
-solana balance $RELAYER_PAYER_PUBKEY --url https://api.devnet.solana.com
+solana balance --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
+solana balance $RELAYER_PAYER_PUBKEY --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 ```
 
 **Fee for this step**: Free (Solana devnet airdrop)
@@ -259,11 +259,12 @@ The environment is already created at `rust/sealevel/environments/testnet/`. No 
 cd rust/sealevel
 
 DEPLOYER_KEYPAIR=~/.config/solana/pruv-bridge-deployer.json
-SOLANA_RPC=https://api.devnet.solana.com
+SOLANA_RPC=https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 
-./target/debug/hyperlane-sealevel-client core deploy \
+./target/debug/hyperlane-sealevel-client \
   --url $SOLANA_RPC \
   --keypair $DEPLOYER_KEYPAIR \
+  core deploy \
   --local-domain 1399811151 \
   --environment testnet \
   --environments-dir ./environments \
@@ -321,47 +322,32 @@ Verify installation:
 solana-verify --version
 ```
 
-You also need **Docker** running for the reproducible build step:
-
-```bash
-docker --version   # Docker Desktop must be running
-```
+Docker is only needed if you later want to do full `verify-from-repo` on-chain registration (Step D). It is **not required** for the hash comparison in Step C.
 
 ---
 
-#### Step B — Build Verifiably (Docker-based, reproducible)
+#### Step B — Confirm Programs Are Built Locally
 
-The `solana-verify build` command builds inside a Docker container with a pinned Solana toolchain, producing a deterministic binary whose hash can be trusted by anyone.
+> **Skip Docker build for Solana 1.14.20.** The `solana-verify build` Docker workflow requires a pre-built verifiable image for the target Solana version. No such image exists for 1.14.20 (it predates the verifiable-build pipeline). Since you already built the programs with `build-programs.sh` using the exact 1.14.20 toolchain, the `.so` files in `target/deploy/` are the authoritative local artifacts — use them directly for hash comparison.
 
-> **Solana version**: The programs require `1.14.20`. Use `--solana-version 1.14.20` to select the matching Docker image.
-
-Run from `rust/sealevel/` (one command per program):
+Confirm all required `.so` files are present:
 
 ```bash
 cd rust/sealevel
 
-# Mailbox
-solana-verify build \
-  --library-name hyperlane_sealevel_mailbox \
-  --solana-version 1.14.20
-
-# IGP
-solana-verify build \
-  --library-name hyperlane_sealevel_igp \
-  --solana-version 1.14.20
-
-# Validator Announce
-solana-verify build \
-  --library-name hyperlane_sealevel_validator_announce \
-  --solana-version 1.14.20
-
-# Multisig ISM
-solana-verify build \
-  --library-name hyperlane_sealevel_multisig_ism_message_id \
-  --solana-version 1.14.20
+ls -lh target/deploy/hyperlane_sealevel_mailbox.so \
+       target/deploy/hyperlane_sealevel_igp.so \
+       target/deploy/hyperlane_sealevel_validator_announce.so \
+       target/deploy/hyperlane_sealevel_multisig_ism_message_id.so
 ```
 
-Each command prints the **executable hash** after building. Save these — you'll compare them against the deployed hashes next.
+If any file is missing, rebuild first:
+
+```bash
+cd rust/sealevel/programs
+./build-programs.sh all
+cd ../..
+```
 
 ---
 
@@ -374,7 +360,7 @@ Use the provided script, which dumps each deployed program and compares SHA256 h
 ```bash
 # From the repo root
 bash scripts/verify-solana-programs.sh \
-  --url https://api.devnet.solana.com \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
   --program-ids-file rust/sealevel/environments/testnet/solanadevnet/core/program-ids.json
 ```
 
@@ -399,7 +385,7 @@ solana-verify get-executable-hash target/deploy/hyperlane_sealevel_mailbox.so
 
 # Get hash of deployed program
 solana-verify get-program-hash \
-  --url https://api.devnet.solana.com \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
   <MAILBOX_PROGRAM_ID>
 
 # Repeat for each program (igp, validator_announce, multisig_ism_message_id)
@@ -418,7 +404,7 @@ Once hashes match, register the verification on-chain. This creates a PDA that S
 ```bash
 cd rust/sealevel
 
-SOLANA_RPC=https://api.devnet.solana.com
+SOLANA_RPC=https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 REPO_URL=https://github.com/<YOUR_ORG>/<YOUR_REPO>
 COMMIT=$(git rev-parse HEAD)
 MOUNT_PATH=rust/sealevel   # path inside the repo to the Cargo.toml workspace
@@ -452,7 +438,7 @@ After submitting, check the on-chain PDA status:
 ```bash
 # Mailbox example
 solana-verify get-program-hash \
-  --url https://api.devnet.solana.com \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
   <MAILBOX_PROGRAM_ID>
 ```
 
@@ -635,7 +621,7 @@ sed -i '' 's/REPLACE_WITH_USDC_WARP_EVM_ADDRESS/<USDC_WARP_EVM_ADDRESS>/' \
 ### 7.3 Set Solana CLI to Devnet
 
 ```bash
-solana config set --url https://api.devnet.solana.com
+solana config set --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 solana config set --keypair ~/.config/solana/pruv-bridge-deployer.json
 ```
 
@@ -644,14 +630,16 @@ solana config set --keypair ~/.config/solana/pruv-bridge-deployer.json
 ```bash
 cd rust/sealevel
 
-yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+yes | ./target/debug/hyperlane-sealevel-client \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  warp-route deploy \
   --environment testnet \
   --environments-dir ./environments \
   --built-so-dir ./target/deploy \
   --warp-route-name pruv-native-solana \
   --token-config-file ./environments/testnet/warp-routes/pruv-native-solana/token-config.json \
-  --registry .hyperlane \
-  --url https://api.devnet.solana.com
+  --registry .hyperlane
 ```
 
 Note the output:
@@ -664,14 +652,16 @@ Note the output:
 ### 7.5 Deploy USDC Warp Route
 
 ```bash
-yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+yes | ./target/debug/hyperlane-sealevel-client \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  warp-route deploy \
   --environment testnet \
   --environments-dir ./environments \
   --built-so-dir ./target/deploy \
   --warp-route-name usdc-pruv-solana \
   --token-config-file ./environments/testnet/warp-routes/usdc-pruv-solana/token-config.json \
-  --registry .hyperlane \
-  --url https://api.devnet.solana.com
+  --registry .hyperlane
 ```
 
 **Estimated fee**: ~0.5–0.7 SOL
@@ -679,14 +669,16 @@ yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
 ### 7.6 Deploy Custom ERC20 Warp Route
 
 ```bash
-yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+yes | ./target/debug/hyperlane-sealevel-client \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  warp-route deploy \
   --environment testnet \
   --environments-dir ./environments \
   --built-so-dir ./target/deploy \
   --warp-route-name custom-erc20-solana \
   --token-config-file ./environments/testnet/warp-routes/custom-erc20-solana/token-config.json \
-  --registry .hyperlane \
-  --url https://api.devnet.solana.com
+  --registry .hyperlane
 ```
 
 **Estimated fee**: ~0.6–0.8 SOL
@@ -737,13 +729,14 @@ Use your deployed multisig ISM program ID from `program-ids.json`:
 MULTISIG_ISM=$(cat rust/sealevel/environments/testnet/solanadevnet/core/program-ids.json | \
   python3 -c "import json,sys; print(json.load(sys.stdin)['multisig_ism_message_id'])")
 
-./target/debug/hyperlane-sealevel-client multisig-ism-message-id set-validators-and-threshold \
+./target/debug/hyperlane-sealevel-client \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  multisig-ism-message-id set-validators-and-threshold \
   --program-id $MULTISIG_ISM \
   --domain 7336 \
   --validators <YOUR_VALIDATOR_EVM_ADDRESS> \
-  --threshold 1 \
-  --url https://api.devnet.solana.com \
-  --keypair ~/.config/solana/pruv-bridge-deployer.json
+  --threshold 1
 ```
 
 > **What is your validator EVM address?** It is the EVM address derived from the private key you use in `agent-config-testnet.json` (`defaultsigner.key`). Get it with:
@@ -772,7 +765,7 @@ for PROGRAM_ID in <PRUV_SOLANA_PROGRAM_BASE58> <USDC_SOLANA_PROGRAM_BASE58> <CUS
   echo "Program: $PROGRAM_ID"
   echo "ATA Payer PDA: $ATA_PAYER"
   solana transfer $ATA_PAYER 0.5 \
-    --url https://api.devnet.solana.com \
+    --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
     --keypair ~/.config/solana/pruv-bridge-deployer.json \
     --allow-unfunded-recipient
   echo ""
@@ -1012,7 +1005,7 @@ If you see `Repreparing message` or `Unable to reach quorum`, the relayer is sti
 ```bash
 spl-token accounts \
   --owner <YOUR_SOLANA_PUBKEY> \
-  --url https://api.devnet.solana.com
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32
 ```
 
 Example output when bridge succeeds:
@@ -1176,14 +1169,16 @@ solana-keygen new -o hyperlane_sealevel_token-solanadevnet-buffer.json --no-bip3
 cd -
 
 cd rust/sealevel
-yes | ./target/debug/hyperlane-sealevel-client warp-route deploy \
+yes | ./target/debug/hyperlane-sealevel-client \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
+  --keypair ~/.config/solana/pruv-bridge-deployer.json \
+  warp-route deploy \
   --environment testnet \
   --environments-dir ./environments \
   --built-so-dir ./target/deploy \
   --warp-route-name <symbol>-solana \
   --token-config-file ./environments/testnet/warp-routes/<symbol>-solana/token-config.json \
-  --registry .hyperlane \
-  --url https://api.devnet.solana.com
+  --registry .hyperlane
 ```
 
 Note the **Solana Program ID (base58)** and get its hex:
@@ -1212,7 +1207,7 @@ console.log(pda.toBase58());
 ")
 echo "ATA Payer PDA: $ATA_PAYER"
 solana transfer $ATA_PAYER 0.5 \
-  --url https://api.devnet.solana.com \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
   --keypair ~/.config/solana/pruv-bridge-deployer.json \
   --allow-unfunded-recipient
 ```
@@ -1338,7 +1333,7 @@ The ATA payer PDA for the warp route has run out of SOL. Re-fund it:
 
 ```bash
 solana transfer <ATA_PAYER_PDA> 1 \
-  --url https://api.devnet.solana.com \
+  --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32 \
   --keypair ~/.config/solana/pruv-bridge-deployer.json \
   --allow-unfunded-recipient
 ```

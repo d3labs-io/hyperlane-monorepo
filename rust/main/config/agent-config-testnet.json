@@ -40,7 +40,7 @@
       },
       "rpcUrls": [
         {
-          "http": "https://api.devnet.solana.com"
+          "http": "https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32"
         }
       ],
       "index": {

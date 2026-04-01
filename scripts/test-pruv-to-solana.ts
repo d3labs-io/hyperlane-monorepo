@@ -18,7 +18,8 @@ import { ethers } from 'ethers';
 
 const CONFIG = {
   evmRpcUrl: 'https://rpc.testnet.pruv.network',
-  solanaRpcUrl: 'https://api.devnet.solana.com',
+  solanaRpcUrl:
+    'https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32',
   privateKey:
     process.env.PRIVATE_KEY ||
     '0x44928c5dabbb6e5791c8d13bd091dc794f2376d53693d40b85176d60404dcd3b',
@@ -367,7 +368,7 @@ async function main(): Promise<void> {
   console.log('');
   console.log('  To check Solana token balances after delivery:');
   console.log(
-    `    spl-token accounts --owner ${CONFIG.solanaRecipientPubkey} --url https://api.devnet.solana.com`,
+    `    spl-token accounts --owner ${CONFIG.solanaRecipientPubkey} --url https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32`,
   );
   console.log('');
   console.log('  To check on Hyperlane Explorer:');

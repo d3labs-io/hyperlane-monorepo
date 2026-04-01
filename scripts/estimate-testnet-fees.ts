@@ -18,7 +18,8 @@ import * as path from 'path';
 // ─── Chain Configuration ────────────────────────────────────────────────────
 
 const PRUV_RPC = 'https://rpc.testnet.pruv.network';
-const SOLANA_TESTNET_RPC = 'https://api.devnet.solana.com';
+const SOLANA_TESTNET_RPC =
+  'https://api.zan.top/node/v1/solana/devnet/a6fe1b27d8204694827438361ed0ff32';
 
 // pruvtest core contracts (already deployed)
 const PRUV_ADDRESSES = {
