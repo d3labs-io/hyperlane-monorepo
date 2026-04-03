@@ -10,7 +10,7 @@ borsh.workspace = true
 solana-program.workspace = true
 spl-type-length-value.workspace = true
 
-hyperlane-core = { path = "../../../main/hyperlane-core" }
+hyperlane-core = { path = "../../main/hyperlane-core" }
 # Required to allow dependencies `getrandom` but to preserve determinism required by programs, see
 # https://github.com/solana-foundation/developer-content/blob/main/docs/programs/lang-rust.md#depending-on-rand
 getrandom = { workspace = true, features = ["custom"] }

@@ -1,0 +1,65 @@
+[package]
+name = "hyperlane-core"
+documentation = "https://docs.hyperlane.xyz"
+edition = "2021"
+homepage = "https://hyperlane.xyz"
+license-file = "../../../LICENSE.md"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-trait = "0.1"
+async-rwlock = "1.3"
+auto_impl = "1.0"
+bigdecimal = "0.4.2"
+borsh = "0.9"
+bs58 = "0.5.0"
+bytes = { version = "1", features = ["serde"] }
+config = { version = "0.13.3", optional = true }
+convert_case = "0.6"
+derive-new = "0.5"
+derive_more = "0.99"
+ethers-contract = { git = "https://github.com/hyperlane-xyz/ethers-rs", tag = "2024-04-25", features = ["legacy"], optional = true }
+ethers-core = { git = "https://github.com/hyperlane-xyz/ethers-rs", tag = "2024-04-25", features = [], optional = true }
+ethers-providers = { git = "https://github.com/hyperlane-xyz/ethers-rs", tag = "2024-04-25", features = [], optional = true }
+eyre = "=0.6.8"
+fixed-hash = "0.8.0"
+futures = { version = "0.3", optional = true }
+getrandom = { version = "0.2", features = ["js"] }
+hex = "0.4.3"
+itertools = "*"
+num = { version = "0.4", features = ["serde"] }
+num-derive = "0.4.0"
+num-traits = "0.2"
+prometheus = "0.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha3 = "0.10"
+strum = { version = "0.26.2", optional = true, features = ["derive"] }
+strum_macros = { version = "0.26.2", optional = true }
+thiserror = "1.0"
+tokio = { version = "1.4", features = ["rt", "time", "parking_lot", "tracing"], optional = true }
+tracing = "0.1"
+typetag = "0.2"
+primitive-types = { version = "=0.12.1", optional = true }
+solana-sdk = { version = "=1.14.13", optional = true }
+tiny-keccak = { version = "2.0.2", features = ["keccak"] }
+uint = "0.9.5"
+
+[dev-dependencies]
+tokio = { version = "1.4", features = ["rt", "time", "parking_lot", "tracing"] }
+
+[features]
+default = ["strum"]
+float = []
+test-utils = ["dep:config"]
+agent = ["ethers", "strum"]
+strum = ["dep:strum"]
+ethers = [
+    "dep:ethers-core",
+    "dep:ethers-contract",
+    "dep:ethers-providers",
+    "dep:primitive-types",
+]
+solana = ["dep:solana-sdk"]
+async = ["tokio", "futures"]
