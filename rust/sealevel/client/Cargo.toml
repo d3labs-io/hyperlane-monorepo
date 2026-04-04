@@ -1,3 +1,4 @@
+cargo-features = ["workspace-inheritance"]
 
 [package]
 name = "hyperlane-sealevel-client"
@@ -14,6 +15,7 @@ hex.workspace = true
 pretty_env_logger.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 solana-clap-utils.workspace = true
 solana-cli-config.workspace = true
 solana-client.workspace = true

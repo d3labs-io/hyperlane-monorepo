@@ -1,0 +1,10 @@
+{
+  "pruvtest": {
+    "hex": "0x0000000000000000000000008ca37ea1c9aa339c190a6e869aed349a9d020077",
+    "base58": "1111111111112xeCLgx8bzfTkqMGok2KkHJHefQ2"
+  },
+  "solanadevnet": {
+    "hex": "0x661d33c6ecda0fca5d39397e6e06f89717ae585ffa6ee2bf4b760a9744ab0ed5",
+    "base58": "7scQtGoJKMuWWmCuAZwNcHRWchiG3KSPuzGQAoY2ijvL"
+  }
+}

@@ -425,6 +425,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dabbe35f96fb9507f7330793dc490461b2962659ac5d427181e451a623751d1"
 
 [[package]]
+name = "bech32"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -938,7 +944,7 @@ checksum = "c94090a6663f224feae66ab01e41a2555a8296ee07b5f20dab8888bdefc9f617"
 dependencies = [
  "base58check",
  "base64 0.12.3",
- "bech32",
+ "bech32 0.7.3",
  "blake2",
  "digest 0.10.7",
  "generic-array 0.14.7",
@@ -1642,7 +1648,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1699,11 +1705,11 @@ version = "1.0.2"
 source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25#361b69b9561e11eb3cf8000a51de1985e2571785"
 dependencies = [
  "ethers-addressbook",
- "ethers-contract",
- "ethers-core",
+ "ethers-contract 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "ethers-etherscan",
  "ethers-middleware",
- "ethers-providers",
+ "ethers-providers 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "ethers-signers",
 ]
 
@@ -1712,7 +1718,7 @@ name = "ethers-addressbook"
 version = "1.0.2"
 source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25#361b69b9561e11eb3cf8000a51de1985e2571785"
 dependencies = [
- "ethers-core",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "once_cell",
  "serde",
  "serde_json",
@@ -1723,10 +1729,28 @@ name = "ethers-contract"
 version = "1.0.2"
 source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25#361b69b9561e11eb3cf8000a51de1985e2571785"
 dependencies = [
- "ethers-contract-abigen",
- "ethers-contract-derive",
- "ethers-core",
- "ethers-providers",
+ "ethers-contract-abigen 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "ethers-contract-derive 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "ethers-providers 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "futures-util",
+ "hex",
+ "once_cell",
+ "pin-project",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ethers-contract"
+version = "1.0.2"
+source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30#02d03c5f62cc5b34d44e34b0e2bc80c2bca83d6c"
+dependencies = [
+ "ethers-contract-abigen 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
+ "ethers-contract-derive 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
+ "ethers-providers 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
  "futures-util",
  "hex",
  "once_cell",
@@ -1744,7 +1768,31 @@ dependencies = [
  "Inflector",
  "cfg-if",
  "dunce",
- "ethers-core",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "eyre",
+ "getrandom 0.2.15",
+ "hex",
+ "proc-macro2 1.0.86",
+ "quote 1.0.37",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "syn 1.0.109",
+ "toml",
+ "url",
+ "walkdir",
+]
+
+[[package]]
+name = "ethers-contract-abigen"
+version = "1.0.2"
+source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30#02d03c5f62cc5b34d44e34b0e2bc80c2bca83d6c"
+dependencies = [
+ "Inflector",
+ "cfg-if",
+ "dunce",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
  "eyre",
  "getrandom 0.2.15",
  "hex",
@@ -1765,8 +1813,22 @@ name = "ethers-contract-derive"
 version = "1.0.2"
 source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25#361b69b9561e11eb3cf8000a51de1985e2571785"
 dependencies = [
- "ethers-contract-abigen",
- "ethers-core",
+ "ethers-contract-abigen 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "hex",
+ "proc-macro2 1.0.86",
+ "quote 1.0.37",
+ "serde_json",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ethers-contract-derive"
+version = "1.0.2"
+source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30#02d03c5f62cc5b34d44e34b0e2bc80c2bca83d6c"
+dependencies = [
+ "ethers-contract-abigen 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
  "hex",
  "proc-macro2 1.0.86",
  "quote 1.0.37",
@@ -1805,11 +1867,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethers-core"
+version = "1.0.2"
+source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30#02d03c5f62cc5b34d44e34b0e2bc80c2bca83d6c"
+dependencies = [
+ "arrayvec",
+ "bytes",
+ "cargo_metadata",
+ "chrono",
+ "elliptic-curve",
+ "ethabi",
+ "generic-array 0.14.7",
+ "hex",
+ "k256",
+ "once_cell",
+ "open-fastrlp",
+ "rand 0.8.5",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_json",
+ "strum 0.24.1",
+ "syn 1.0.109",
+ "thiserror",
+ "tiny-keccak",
+ "unicode-xid 0.2.5",
+]
+
+[[package]]
 name = "ethers-etherscan"
 version = "1.0.2"
 source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25#361b69b9561e11eb3cf8000a51de1985e2571785"
 dependencies = [
- "ethers-core",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "getrandom 0.2.15",
  "reqwest",
  "semver",
@@ -1827,10 +1917,10 @@ source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25#361b69b9
 dependencies = [
  "async-trait",
  "auto_impl 0.5.0",
- "ethers-contract",
- "ethers-core",
+ "ethers-contract 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "ethers-etherscan",
- "ethers-providers",
+ "ethers-providers 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "ethers-signers",
  "futures-locks",
  "futures-util",
@@ -1853,7 +1943,41 @@ dependencies = [
  "async-trait",
  "auto_impl 1.2.0",
  "base64 0.13.1",
- "ethers-core",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
+ "futures-core",
+ "futures-timer",
+ "futures-util",
+ "getrandom 0.2.15",
+ "hashers",
+ "hex",
+ "http",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "pin-project",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-timer",
+ "web-sys",
+ "ws_stream_wasm",
+]
+
+[[package]]
+name = "ethers-providers"
+version = "1.0.2"
+source = "git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30#02d03c5f62cc5b34d44e34b0e2bc80c2bca83d6c"
+dependencies = [
+ "async-trait",
+ "auto_impl 1.2.0",
+ "base64 0.13.1",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
  "futures-channel",
  "futures-core",
  "futures-timer",
@@ -1891,7 +2015,7 @@ dependencies = [
  "coins-bip39",
  "elliptic-curve",
  "eth-keystore",
- "ethers-core",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2024-04-25)",
  "hex",
  "rand 0.8.5",
  "sha2 0.10.8",
@@ -2421,12 +2545,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperlane-application"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum 0.26.3",
+]
+
+[[package]]
 name = "hyperlane-core"
 version = "0.1.0"
 dependencies = [
  "async-rwlock",
  "async-trait",
  "auto_impl 1.2.0",
+ "bech32 0.11.1",
  "bigdecimal",
  "borsh",
  "bs58 0.5.1",
@@ -2435,14 +2569,15 @@ dependencies = [
  "convert_case 0.6.0",
  "derive-new",
  "derive_more 0.99.17",
- "ethers-contract",
- "ethers-core",
- "ethers-providers",
+ "ethers-contract 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
+ "ethers-core 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
+ "ethers-providers 1.0.2 (git+https://github.com/hyperlane-xyz/ethers-rs?tag=2025-05-30)",
  "eyre",
  "fixed-hash 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures",
  "getrandom 0.2.15",
  "hex",
+ "hyperlane-application",
  "itertools 0.13.0",
  "num 0.4.3",
  "num-derive 0.4.2",
@@ -2461,6 +2596,7 @@ dependencies = [
  "tracing",
  "typetag",
  "uint",
+ "uuid 1.11.0",
 ]
 
 [[package]]
@@ -2488,6 +2624,7 @@ dependencies = [
  "pretty_env_logger",
  "serde",
  "serde_json",
+ "serde_yaml 0.9.34+deprecated",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
@@ -2704,6 +2841,7 @@ dependencies = [
  "hyperlane-sealevel-test-ism",
  "hyperlane-sealevel-token-lib",
  "hyperlane-test-utils",
+ "hyperlane-warp-route",
  "num-derive 0.4.2",
  "num-traits",
  "serializable-account-meta",
@@ -2731,6 +2869,7 @@ dependencies = [
  "hyperlane-sealevel-test-ism",
  "hyperlane-sealevel-token-lib",
  "hyperlane-test-utils",
+ "hyperlane-warp-route",
  "num-derive 0.4.2",
  "num-traits",
  "serializable-account-meta",
@@ -2756,6 +2895,7 @@ dependencies = [
  "hyperlane-sealevel-igp",
  "hyperlane-sealevel-mailbox",
  "hyperlane-sealevel-message-recipient-interface",
+ "hyperlane-warp-route",
  "num-derive 0.4.2",
  "num-traits",
  "serializable-account-meta",
@@ -2781,6 +2921,7 @@ dependencies = [
  "hyperlane-sealevel-test-ism",
  "hyperlane-sealevel-token-lib",
  "hyperlane-test-utils",
+ "hyperlane-warp-route",
  "num-derive 0.4.2",
  "num-traits",
  "serializable-account-meta",
@@ -2837,6 +2978,13 @@ dependencies = [
  "solana-sdk",
  "spl-noop",
  "spl-token-2022",
+]
+
+[[package]]
+name = "hyperlane-warp-route"
+version = "0.1.0"
+dependencies = [
+ "hyperlane-core",
 ]
 
 [[package]]
@@ -4893,6 +5041,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+dependencies = [
+ "indexmap 2.5.0",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "serializable-account-meta"
 version = "0.1.0"
 dependencies = [
@@ -5195,7 +5356,7 @@ dependencies = [
  "lazy_static",
  "serde",
  "serde_derive",
- "serde_yaml",
+ "serde_yaml 0.8.26",
  "solana-clap-utils",
  "solana-sdk",
  "url",
@@ -6682,6 +6843,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
+
+[[package]]
 name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6731,6 +6898,16 @@ name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.15",
+ "serde",
+]
+
+[[package]]
+name = "uuid"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8c5f0a0af699448548ad1a2fbf920fb4bee257eae39953ba95cb84891a0446a"
 dependencies = [
  "getrandom 0.2.15",
  "serde",
