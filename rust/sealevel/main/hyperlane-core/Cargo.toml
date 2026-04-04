@@ -22,9 +22,6 @@ config = { workspace = true, optional = true }
 convert_case.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
-ethers-contract = { workspace = true, optional = true }
-ethers-core = { workspace = true, optional = true }
-ethers-providers = { workspace = true, optional = true }
 eyre.workspace = true
 fixed-hash.workspace = true
 futures = { workspace = true, optional = true }
@@ -59,13 +56,7 @@ tokio = { workspace = true, features = ["rt", "time"] }
 default = ["strum"]
 float = []
 test-utils = ["dep:config"]
-agent = ["ethers", "strum"]
+agent = ["strum"]
 strum = ["dep:strum"]
-ethers = [
-    "dep:ethers-core",
-    "dep:ethers-contract",
-    "dep:ethers-providers",
-    "dep:primitive-types",
-]
 solana = ["dep:solana-sdk"]
 async = ["tokio", "futures"]
