@@ -23,9 +23,6 @@ members = [
     "programs/mailbox-test",
     "programs/test-send-receiver",
     "programs/validator-announce",
-    "main/hyperlane-core",
-    "main/applications/hyperlane-warp-route",
-    "main/applications/hyperlane-application",
 ]
 
 [workspace.package]
@@ -58,14 +55,13 @@ crunchy = "0.2"
 ctrlc = "3.2"
 curve25519-dalek = { version = "~3.2", features = ["serde"] }
 derive-new = "0.5"
-derive_more = "0.99"
 eyre = "=0.6.8"
 fixed-hash = "0.8.0"
 futures = "0.3"
 futures-util = "0.3"
 generic-array = { version = "0.14", features = ["serde", "more_lengths"] }
 # Required for WASM support https://docs.rs/getrandom/latest/getrandom/#webassembly-support
-bech32 = "=0.11.0"
+bech32 = "0.9.1"
 elliptic-curve = "0.12.3"
 getrandom = { version = "0.2", features = ["js"] }
 hex = "0.4.3"

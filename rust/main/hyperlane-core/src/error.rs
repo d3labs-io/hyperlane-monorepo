@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::error::Error as StdError;
 use std::fmt::{Debug, Display, Formatter};
+use std::num::TryFromIntError;
 use std::ops::Deref;
 
 use bigdecimal::ParseBigDecimalError;
@@ -16,7 +17,7 @@ use crate::{
 };
 
 /// The result of interacting with a chain.
-pub type ChainResult<T> = Result<T, ChainCommunicationError>;
+pub type ChainResult<T = ()> = Result<T, ChainCommunicationError>;
 
 /// An "Any"-typed error.
 pub trait HyperlaneCustomError: StdError + Send + Sync + Any {}
@@ -80,7 +81,7 @@ pub enum ChainCommunicationError {
     Other(HyperlaneCustomErrorWrapper),
     /// A transaction submission timed out
     #[error("Transaction submission timed out")]
-    TransactionTimeout(),
+    TransactionTimeout,
     /// No signer is available and was required for the operation
     #[error("Signer unavailable")]
     SignerUnavailable,
@@ -130,9 +131,9 @@ pub enum ChainCommunicationError {
     #[error("Insufficient funds. Required: {required:?}, available: {available:?}")]
     InsufficientFunds {
         /// The required amount of funds.
-        required: U256,
+        required: Box<U256>,
         /// The available amount of funds.
-        available: U256,
+        available: Box<U256>,
     },
     /// Primitive type error
     #[error(transparent)]
@@ -159,6 +160,9 @@ pub enum ChainCommunicationError {
     /// Invalid reorg period
     #[error("Invalid reorg period: {0:?}")]
     InvalidReorgPeriod(ReorgPeriod),
+    /// Convert Integer Error
+    #[error("{0}")]
+    TryFromIntError(#[from] TryFromIntError),
 }
 
 impl ChainCommunicationError {
@@ -249,7 +253,7 @@ pub enum HyperlaneProtocolError {
     /// Signature Error pasthrough
     #[cfg(feature = "ethers")]
     #[error(transparent)]
-    SignatureError(#[from] ethers_core::types::SignatureError),
+    SignatureError(#[from] Box<ethers_core::types::SignatureError>),
     /// IO error from Read/Write usage
     #[error(transparent)]
     IoError(#[from] std::io::Error),

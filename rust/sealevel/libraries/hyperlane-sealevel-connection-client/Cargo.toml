@@ -10,7 +10,7 @@ borsh.workspace = true
 solana-program.workspace = true
 
 access-control = { path = "../access-control" }
-hyperlane-core = { path = "../../main/hyperlane-core" }
+hyperlane-core = { path = "../../../main/hyperlane-core" }
 hyperlane-sealevel-mailbox = { path = "../../programs/mailbox", features = [
     "no-entrypoint",
 ] }

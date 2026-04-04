@@ -24,7 +24,7 @@ solana-sdk.workspace = true
 solana-transaction-status.workspace = true
 
 account-utils = { path = "../libraries/account-utils" }
-hyperlane-core = { path = "../main/hyperlane-core" }
+hyperlane-core = { path = "../../main/hyperlane-core" }
 hyperlane-sealevel-connection-client = { path = "../libraries/hyperlane-sealevel-connection-client" }
 hyperlane-sealevel-mailbox = { path = "../programs/mailbox", features = [
     "no-entrypoint",

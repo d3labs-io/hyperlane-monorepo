@@ -1,17 +1,18 @@
 use std::str::FromStr;
 
+use cometbft_rpc::client::CompatMode;
 use derive_new::new;
 use url::Url;
 
 use hyperlane_core::{
-    config::OperationBatchConfig, ChainCommunicationError, FixedPointNumber, NativeToken,
+    config::OpSubmissionConfig, ChainCommunicationError, FixedPointNumber, NativeToken,
 };
 
 /// Cosmos connection configuration
 #[derive(Debug, Clone)]
 pub struct ConnectionConf {
     /// The GRPC urls to connect to
-    grpc_urls: Vec<Url>,
+    pub grpc_urls: Vec<Url>,
     /// The RPC url to connect to
     rpc_urls: Vec<Url>,
     /// The chain ID
@@ -29,9 +30,14 @@ pub struct ConnectionConf {
     /// bech32 with the appropriate length.
     contract_address_bytes: usize,
     /// Operation batching configuration
-    pub operation_batch: OperationBatchConfig,
+    pub op_submission_config: OpSubmissionConfig,
     /// Native Token
     native_token: NativeToken,
+    /// Gas Multiplier
+    gas_multiplier: f64,
+    /// RPC Compatibility Mode
+    /// This is useful to support different tendermin/cometbft spec versions
+    pub compat_mode: CompatMode,
 }
 
 /// Untyped cosmos amount
@@ -123,6 +129,11 @@ impl ConnectionConf {
         self.contract_address_bytes
     }
 
+    /// Get the gas multiplier which might be different for each chain
+    pub fn get_gas_multiplier(&self) -> f64 {
+        self.gas_multiplier
+    }
+
     /// Create a new connection configuration
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -133,10 +144,16 @@ impl ConnectionConf {
         canonical_asset: String,
         minimum_gas_price: RawCosmosAmount,
         contract_address_bytes: usize,
-        operation_batch: OperationBatchConfig,
+        op_submission_config: OpSubmissionConfig,
         native_token: NativeToken,
-    ) -> Self {
-        Self {
+        gas_multiplier: f64,
+        compat_mode: Option<&str>,
+    ) -> Result<Self, String> {
+        let compat_mode = compat_mode
+            .map(|s| CompatMode::from_str(s).map_err(|e| e.to_string()))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(Self {
             grpc_urls,
             rpc_urls,
             chain_id,
@@ -144,8 +161,10 @@ impl ConnectionConf {
             canonical_asset,
             gas_price: minimum_gas_price,
             contract_address_bytes,
-            operation_batch,
+            op_submission_config,
             native_token,
-        }
+            gas_multiplier,
+            compat_mode,
+        })
     }
 }
