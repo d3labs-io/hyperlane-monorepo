@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "client",
     "libraries/access-control",
     "libraries/account-utils",
     "libraries/ecdsa-signature",
