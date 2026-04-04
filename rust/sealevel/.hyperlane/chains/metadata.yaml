@@ -1,0 +1,52 @@
+solanatestnet:
+  chainId: 1399811150
+  domainId: 1399811150
+  isTestnet: true
+  name: solanatestnet
+  protocol: sealevel
+  displayName: Solana Testnet
+  nativeToken:
+    name: Solana
+    symbol: SOL
+    decimals: 9
+  rpcUrls:
+    - http: https://api.zan.top/node/v1/solana/testnet/a6fe1b27d8204694827438361ed0ff32
+
+pruvtest:
+  chainId: 7336
+  domainId: 7336
+  isTestnet: true
+  name: pruvtest
+  protocol: ethereum
+  displayName: Pruv Testnet
+  nativeToken:
+    name: Pruv
+    symbol: PRUV
+    decimals: 18
+  rpcUrls:
+    - http: https://rpc.testnet.pruv.network
+
+sealeveltest1:
+  domainId: 13375
+  isTestnet: true
+  name: sealeveltest1
+  rpcUrls:
+    - http: http://127.0.0.1:8899
+solalocal:
+  domainId: 13375
+  isTestnet: true
+  name: solalocal
+  rpcUrls:
+    - http: http://127.0.0.1:8899
+evmtest2:
+  domainId: 31338
+  isTestnet: true
+  name: evmtest2
+  rpcUrls:
+    - http: http://127.0.0.1:8546
+test4:
+  domainId: 31337
+  isTestnet: true
+  name: test4
+  rpcUrls:
+    - http: http://127.0.0.1:8545
