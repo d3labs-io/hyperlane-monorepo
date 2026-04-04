@@ -31,6 +31,17 @@ const ISM_TYPE: ModuleType = ModuleType::MessageIdMultisig;
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program::entrypoint!(process_instruction);
 
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Hyperlane Multisig ISM",
+    project_url: "https://d3labs.io",
+    contacts: "email:security@d3labs.io",
+    policy: "https://d3labs.io/security",
+    preferred_languages: "en",
+    source_code: "https://github.com/d3labs-io/hyperlane-monorepo",
+    auditors: "N/A"
+}
+
 /// PDA seeds relating to the access control PDA account.
 #[macro_export]
 macro_rules! access_control_pda_seeds {

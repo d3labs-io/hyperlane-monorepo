@@ -19,6 +19,17 @@ use crate::plugin::SyntheticPlugin;
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program::entrypoint!(process_instruction);
 
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Hyperlane Warp Token",
+    project_url: "https://d3labs.io",
+    contacts: "email:security@d3labs.io",
+    policy: "https://d3labs.io/security",
+    preferred_languages: "en",
+    source_code: "https://github.com/d3labs-io/hyperlane-monorepo",
+    auditors: "N/A"
+}
+
 /// Processes an instruction.
 pub fn process_instruction(
     program_id: &Pubkey,

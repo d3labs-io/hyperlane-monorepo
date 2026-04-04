@@ -11,6 +11,7 @@ no-entrypoint = []
 [dependencies]
 borsh.workspace = true
 solana-program.workspace = true
+solana-security-txt.workspace = true
 thiserror.workspace = true
 
 account-utils = { path = "../../libraries/account-utils" }

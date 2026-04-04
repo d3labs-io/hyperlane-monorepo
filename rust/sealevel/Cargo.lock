@@ -2525,6 +2525,7 @@ dependencies = [
  "serde",
  "serializable-account-meta",
  "solana-program",
+ "solana-security-txt",
  "thiserror",
 ]
 
@@ -2574,6 +2575,7 @@ dependencies = [
  "serde",
  "serializable-account-meta",
  "solana-program",
+ "solana-security-txt",
  "spl-noop",
  "thiserror",
 ]
@@ -2638,6 +2640,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
+ "solana-security-txt",
  "thiserror",
 ]
 
@@ -2694,6 +2697,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
+ "solana-security-txt",
  "spl-associated-token-account",
  "spl-noop",
  "spl-token",
@@ -2794,6 +2798,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
+ "solana-security-txt",
  "thiserror",
 ]
 
@@ -5584,6 +5589,12 @@ dependencies = [
  "rustversion",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "solana-security-txt"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "468aa43b7edb1f9b7b7b686d5c3aeb6630dc1708e86e31343499dd5c4d775183"
 
 [[package]]
 name = "solana-send-transaction-service"
