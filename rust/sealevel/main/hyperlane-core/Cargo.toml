@@ -22,6 +22,9 @@ config = { workspace = true, optional = true }
 convert_case.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
+ethers-contract = { git = "https://github.com/hyperlane-xyz/ethers-rs", tag = "2025-05-30", features = ["legacy"], optional = true }
+ethers-core = { git = "https://github.com/hyperlane-xyz/ethers-rs", tag = "2025-05-30", optional = true }
+ethers-providers = { git = "https://github.com/hyperlane-xyz/ethers-rs", tag = "2025-05-30", optional = true }
 eyre.workspace = true
 fixed-hash.workspace = true
 futures = { workspace = true, optional = true }
@@ -56,7 +59,13 @@ tokio = { workspace = true, features = ["rt", "time"] }
 default = ["strum"]
 float = []
 test-utils = ["dep:config"]
-agent = ["strum"]
+agent = ["ethers", "strum"]
 strum = ["dep:strum"]
+ethers = [
+    "dep:ethers-core",
+    "dep:ethers-contract",
+    "dep:ethers-providers",
+    "dep:primitive-types",
+]
 solana = ["dep:solana-sdk"]
 async = ["tokio", "futures"]

@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "client",
     "libraries/access-control",
     "libraries/account-utils",
     "libraries/ecdsa-signature",
@@ -218,6 +219,26 @@ overflow-checks = true
 [profile.release.package.hyperlane-sealevel-validator-announce]
 overflow-checks = true
 
+
+[workspace.dependencies.ethers]
+features = []
+git = "https://github.com/hyperlane-xyz/ethers-rs"
+tag = "2024-04-25"
+
+[workspace.dependencies.ethers-contract]
+features = ["legacy"]
+git = "https://github.com/hyperlane-xyz/ethers-rs"
+tag = "2024-04-25"
+
+[workspace.dependencies.ethers-providers]
+features = []
+git = "https://github.com/hyperlane-xyz/ethers-rs"
+tag = "2024-04-25"
+
+[workspace.dependencies.ethers-signers]
+features = ["aws"]
+git = "https://github.com/hyperlane-xyz/ethers-rs"
+tag = "2024-04-25"
 
 [patch.crates-io.bumpalo]
 git = "https://github.com/fitzgen/bumpalo"
