@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "client",
     "libraries/access-control",
     "libraries/account-utils",
     "libraries/ecdsa-signature",
@@ -11,19 +10,13 @@ members = [
     "libraries/message-recipient-interface",
     "libraries/multisig-ism",
     "libraries/serializable-account-meta",
-    "libraries/test-transaction-utils",
-    "libraries/test-utils",
     "programs/hyperlane-sealevel-igp",
-    "programs/hyperlane-sealevel-igp-test",
     "programs/hyperlane-sealevel-token",
     "programs/hyperlane-sealevel-token-collateral",
     "programs/hyperlane-sealevel-token-cross-collateral",
     "programs/hyperlane-sealevel-token-native",
     "programs/ism/multisig-ism-message-id",
-    "programs/ism/test-ism",
     "programs/mailbox",
-    "programs/mailbox-test",
-    "programs/test-send-receiver",
     "programs/validator-announce",
 ]
 
@@ -58,6 +51,7 @@ crunchy = "0.2"
 ctrlc = "3.2"
 curve25519-dalek = { version = "~3.2", features = ["serde"] }
 derive-new = "0.5"
+derive_more = "0.99"
 eyre = "=0.6.8"
 fixed-hash = "0.8.0"
 futures = "0.3"

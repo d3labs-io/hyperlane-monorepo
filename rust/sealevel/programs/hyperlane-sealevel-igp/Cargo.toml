@@ -12,7 +12,7 @@ no-spl-noop = []
 serde = ["dep:serde"]
 
 [dependencies]
-hyperlane-core = { path = "../../../main/hyperlane-core" }
+hyperlane-core = { path = "../../libraries/hyperlane-core" }
 access-control = { path = "../../libraries/access-control" }
 account-utils = { path = "../../libraries/account-utils" }
 serializable-account-meta = { path = "../../libraries/serializable-account-meta" }

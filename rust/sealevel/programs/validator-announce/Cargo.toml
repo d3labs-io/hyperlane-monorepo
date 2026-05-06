@@ -23,7 +23,7 @@ ecdsa-signature = { path = "../../libraries/ecdsa-signature" }
 hyperlane-sealevel-mailbox = { path = "../mailbox", features = [
     "no-entrypoint",
 ] }
-hyperlane-core = { path = "../../../main/hyperlane-core" }
+hyperlane-core = { path = "../../libraries/hyperlane-core" }
 serializable-account-meta = { path = "../../libraries/serializable-account-meta" }
 
 [dev-dependencies]

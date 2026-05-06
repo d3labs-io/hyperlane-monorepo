@@ -52,7 +52,7 @@ fn get_context_salt(context: Option<&String>) -> H256 {
             if c == "default" {
                 H256::zero()
             } else {
-                ethers::utils::keccak256(c.as_bytes()).into()
+                solana_sdk::keccak::hash(c.as_bytes()).to_bytes().into()
             }
         })
         .unwrap_or_else(H256::zero)

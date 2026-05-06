@@ -9,7 +9,7 @@ edition = "2021"
 solana-program.workspace = true
 thiserror.workspace = true
 
-hyperlane-core = { path = "../../../main/hyperlane-core" }
+hyperlane-core = { path = "../hyperlane-core" }
 # Required to allow dependencies `getrandom` but to preserve determinism required by programs, see
 # https://solana.com/news/rust-to-solana
 getrandom = { workspace = true, features = ["custom"] }

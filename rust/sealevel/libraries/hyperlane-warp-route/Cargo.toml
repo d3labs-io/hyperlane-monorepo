@@ -1,0 +1,11 @@
+[package]
+name = "hyperlane-warp-route"
+documentation = "https://docs.hyperlane.xyz"
+edition = "2021"
+homepage = "https://hyperlane.xyz"
+license-file = "../../LICENSE.md"
+publish = false
+version = "0.1.0"
+
+[dependencies.hyperlane-core]
+path = "../hyperlane-core"

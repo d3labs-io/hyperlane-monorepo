@@ -26,7 +26,7 @@ thiserror.workspace = true
 
 access-control = { path = "../../libraries/access-control" }
 account-utils = { path = "../../libraries/account-utils" }
-hyperlane-core = { path = "../../../main/hyperlane-core" }
+hyperlane-core = { path = "../../libraries/hyperlane-core" }
 hyperlane-sealevel-connection-client = { path = "../../libraries/hyperlane-sealevel-connection-client" }
 hyperlane-sealevel-mailbox = { path = "../mailbox", features = [
     "no-entrypoint",
@@ -39,7 +39,7 @@ hyperlane-sealevel-token-lib = { path = "../../libraries/hyperlane-sealevel-toke
 hyperlane-sealevel-token-collateral = { path = "../hyperlane-sealevel-token-collateral", features = [
     "no-entrypoint",
 ] }
-hyperlane-warp-route = { path = "../../../main/applications/hyperlane-warp-route" }
+hyperlane-warp-route = { path = "../../libraries/hyperlane-warp-route" }
 serializable-account-meta = { path = "../../libraries/serializable-account-meta" }
 
 [dev-dependencies]
