@@ -14,6 +14,7 @@ borsh.workspace = true
 # https://solana.com/news/rust-to-solana
 getrandom = { workspace = true, features = ["custom"] }
 solana-program.workspace = true
+solana-security-txt = { workspace = true }
 solana-system-interface.workspace = true
 thiserror.workspace = true
 

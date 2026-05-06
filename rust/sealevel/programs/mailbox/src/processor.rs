@@ -46,6 +46,17 @@ use crate::{
 #[cfg(not(feature = "no-entrypoint"))]
 entrypoint!(process_instruction);
 
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Hyperlane Mailbox",
+    project_url: "https://d3labs.io",
+    contacts: "email:security@d3labs.io",
+    policy: "https://bridge-security.d3labs.io/solana",
+    preferred_languages: "en",
+    source_code: "https://github.com/d3labs-io/hyperlane-monorepo",
+    auditors: "N/A"
+}
+
 /// Entrypoint for the Mailbox program.
 pub fn process_instruction(
     program_id: &Pubkey,

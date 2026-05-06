@@ -19,6 +19,17 @@ use crate::plugin::NativePlugin;
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program::entrypoint!(process_instruction);
 
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Hyperlane Warp Token Native",
+    project_url: "https://d3labs.io",
+    contacts: "email:security@d3labs.io",
+    policy: "https://bridge-security.d3labs.io/solana",
+    preferred_languages: "en",
+    source_code: "https://github.com/d3labs-io/hyperlane-monorepo",
+    auditors: "N/A"
+}
+
 /// Processes an instruction.
 pub fn process_instruction(
     program_id: &Pubkey,

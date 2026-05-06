@@ -16,6 +16,7 @@ getrandom = { workspace = true, features = ["custom"] }
 num-derive.workspace = true
 num-traits.workspace = true
 solana-program.workspace = true
+solana-security-txt = { workspace = true }
 solana-system-interface.workspace = true
 spl-noop.workspace = true
 thiserror.workspace = true
