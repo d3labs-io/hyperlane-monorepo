@@ -76,9 +76,10 @@ impl SizedData for SyntheticPlugin {
 
 impl SyntheticPlugin {
     /// The size of the mint account.
-    // Hardcoded because Pack trait version conflicts between solana-program-pack 3.0 and spl-token-2022's internal 2.2.
-    // It was calculated by calling `ExtensionType::try_calculate_account_len::<Mint>(vec![ExtensionType::MetadataPointer]).unwrap()`
-    const MINT_ACCOUNT_SIZE: usize = 234;
+    // Token-2022 mint with MetadataPointer extension.
+    // Base mint (170) + MetadataPointer extension (72) = 242 bytes minimum.
+    // Using 250 for safety margin against future Token-2022 upgrades.
+    const MINT_ACCOUNT_SIZE: usize = 250;
 
     /// Returns Ok(()) if the mint account info is valid.
     /// Errors if the key or owner is incorrect.
