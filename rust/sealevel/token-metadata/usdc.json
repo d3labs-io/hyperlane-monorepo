@@ -1,0 +1,6 @@
+{
+  "name": "USD Coin",
+  "symbol": "USDC",
+  "description": "USD Coin bridged via Hyperlane from Pruv Network",
+  "image": "https://raw.githubusercontent.com/d3labs-io/hyperlane-monorepo/main/rust/sealevel/token-metadata/usdc-logo.svg"
+}
